@@ -3,7 +3,7 @@ import code._
 import code.multithreading._
 import code.multithreading.mutable._
 
-
+/*
 class MultiThreadingSpec extends FlatSpec {
 
   def tp(j: Int) = new ThreadPrecursor {
@@ -56,3 +56,4 @@ class MultiThreadingSpec extends FlatSpec {
   }
 }
 
+*/

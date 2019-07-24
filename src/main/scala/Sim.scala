@@ -9,7 +9,7 @@ trait Sim {
 
   // BEGIN state
   private var current_pos  : Int = 0
-  private var current_time : T   = zero
+  protected var current_time : T   = zero
   // END state
 
   protected def algo   : Instruction
@@ -54,10 +54,8 @@ trait SimpleSim extends Sim {
 }
 
 
-abstract class SimO(
-  shared: Simulation,
-  start_time: Int = 0
-) extends Seller with Sim {
+abstract class SimO(start_time: Int = 0) extends Seller with Sim {
+
   init(start_time);
 
   protected def copy_state_to(_to: SimO) = {
@@ -65,8 +63,20 @@ abstract class SimO(
     super[Sim].copy_state_to(_to);
   }
 
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]): SimO
+  def mycopy(): SimO
+
+  // Put it here instead of seller, since there i have access to time
+  setMessageHandler("MarketBuySellerMessage", (m:Message) => {
+    val mCast = m.asInstanceOf[MarketBuySellerMessage]
+
+    recalculate_inv_avg_cost(mCast.item, -mCast.units, mCast.price)
+
+    // Reduce asset
+    inventory(mCast.item) -= mCast.units
+
+    order_history.add(current_time, SalesRecord(mCast.buyer, List(), mCast.units, mCast.units,
+      (mCast.units * mCast.price).toInt));
+  })
 }
 
 

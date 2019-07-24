@@ -6,15 +6,12 @@ import Securities._
 import Commodities._
 import Timeseries._
 
+/*
+class MarketMaker(security: Security) extends SimO with SimpleSim {
 
-class MarketMaker(security: Security,
-                  shared: Simulation
-                 ) extends SimO(shared) with SimpleSim {
-
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]) = {
-    val n = new MarketMaker(security, _shared);
-    copy_state_to(n);
+  override def mycopy():MarketMaker = {
+    val n = new MarketMaker(security)
+    copy_state_to(n)
     n
   }
 
@@ -79,13 +76,11 @@ class MarketMaker(security: Security,
 }
 
 
-class RandomTrader(security: Security, shared: Simulation) extends
-  SimO(shared) with SimpleSim {
+class RandomTrader(security: Security) extends SimO with SimpleSim {
 
   /* FIXME: substitute ob. */
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]) = {
-    val n = new TrendFollower(security, _shared);
+  override def mycopy():TrendFollower = {
+    val n = new TrendFollower(security)
     copy_state_to(n);
     n
   }
@@ -112,17 +107,15 @@ class RandomTrader(security: Security, shared: Simulation) extends
 }
 
 
-class TrendFollower(security: Security, shared: Simulation) extends
-  SimO(shared) with SimpleSim {
+class TrendFollower(security: Security) extends SimO with SimpleSim {
 
   var l = List[(Double, Double)]();
 
   /* FIXME: substitute ob. */
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]) = {
-    val n = new TrendFollower(security, _shared);
-    copy_state_to(n);
-    n.l = l;
+  override def mycopy() = {
+    val n = new TrendFollower(security)
+    copy_state_to(n)
+    n.l = l
     n
   }
 
@@ -176,20 +169,18 @@ class TrendFollower(security: Security, shared: Simulation) extends
 }
 
 
-class Plotter(security: Security, shared: Simulation) extends
-  SimO(shared) with SimpleSim {
+class Plotter(security: Security) extends SimO with SimpleSim {
   import breeze.linalg._
   import breeze.plot._
 
-  var l = List[(Double, Double)]();
-  val f = Figure("Orderbook Plotter");
+  var l = List[(Double, Double)]()
+  val f = Figure("Orderbook Plotter")
 
   /* FIXME: substitute ob. */
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]) = {
-    val n = new Plotter(security, _shared);
-    copy_state_to(n);
-    n.l = l;
+  override def mycopy():Plotter = {
+    val n = new Plotter(security)
+    copy_state_to(n)
+    n.l = l
     n
   }
 
@@ -229,14 +220,12 @@ class Plotter(security: Security, shared: Simulation) extends
 
 /** Arbitrage between orderbooks of a commodity and its option */
 class Arbitrageur(
-  the_option: EuropeanCallOption,
-  shared: Simulation
-) extends SimO(shared) with SimpleSim {
+  the_option: EuropeanCallOption
+) extends SimO with SimpleSim {
 
   /* FIXME: substitute ob. */
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]) = {
-    val n = new Arbitrageur(the_option, _shared);
+  override def mycopy():Arbitrageur = {
+    val n = new Arbitrageur(the_option)
     copy_state_to(n);
     n
   }
@@ -322,39 +311,39 @@ class OBExample {
     }
   }
 
-  val b    = new Owner;
-  val s    = new Owner;
-  val simu = new Simulation;
-  chicago_builder();
-  val opt  = EuropeanCallOption(Flour, 1100, 20, 0.03);
-  val ob_c = simu.chicago(Flour);
-  val ob_o = simu.chicago(opt);
+  val b    = new Owner
+  val s    = new Owner
+  val simu = new Simulation
+  chicago_builder()
+  val opt  = EuropeanCallOption(Flour, 1100, 20, 0.03)
+  val ob_c = simu.chicago(Flour)
+  val ob_o = simu.chicago(opt)
 
   def buy(ob: OrderBook, price: Double, units: Int = 1) {
     ob.enter_buy_order(
-      OB_Line(Some(price), simu.timer, units, None, b));
+      OB_Line(Some(price), simu.timer, units, None, b))
   }
   def sell(ob: OrderBook, price: Double, units: Int = 1) {
     ob.enter_sell_order(
-      OB_Line(Some(price), simu.timer, units, None, s));
+      OB_Line(Some(price), simu.timer, units, None, s))
   }
 
-  val mm      = new   MarketMaker(Flour, simu);
-  val rt      = new  RandomTrader(Flour, simu);
-  val tf      = new TrendFollower(Flour, simu);
-  val arb     = new   Arbitrageur(opt, simu);
-  val plotter = new       Plotter(Flour, simu);
-  simu.init(List(mm/*, rt, tf*/, arb, plotter));
+  val mm      = new   MarketMaker(Flour)
+  val rt      = new  RandomTrader(Flour)
+  val tf      = new TrendFollower(Flour)
+  val arb     = new   Arbitrageur(opt)
+  val plotter = new       Plotter(Flour)
+  simu.init(List(mm/*, rt, tf*/, arb, plotter))
 
-  sell(ob_c, 1300, 1000);
-  sell(ob_c, 1200);
-  buy(ob_c, 1000);
-  buy(ob_c, 900, 1000);
-  sell(ob_o, 200, 1000);
-  buy(ob_o, 50, 1000);
+  sell(ob_c, 1300, 1000)
+  sell(ob_c, 1200)
+  buy(ob_c, 1000)
+  buy(ob_c, 900, 1000)
+  sell(ob_o, 200, 1000)
+  buy(ob_o, 50, 1000)
 }
 
-
+*/
 /*
 import Simulation.SimLib.OB_Sims._
 val obe = new OBExample;

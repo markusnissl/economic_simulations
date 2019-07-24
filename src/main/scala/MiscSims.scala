@@ -1,43 +1,52 @@
 package Simulation.SimLib
 import code._
 import Simulation._
-import Simulation.Factory._
+import _root_.Simulation.Factory._
 import Markets._
-import Securities.Commodities._
+import Commodities._
 
 
-class Source(commodity: Commodity, units: Int, p: Int,
-             shared: Simulation) extends
-  SimO(shared) with SimpleSim {
+class Source(commodity: Commodity, units: Int, p: Int) extends SimO with SimpleSim {
   {
-    shared.market(commodity).add_seller(this);
+    //shared.market(commodity).add_seller(this);
     make(commodity, units, 0); // at no cost
+    // Put on market
+
   }
 
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]) = {
-    val n = new Source(commodity, units, p, _shared);
-    copy_state_to(n);
+  override def mycopy():Source = {
+    val n = new Source(commodity, units, p)
+    copy_state_to(n)
     n
   }
 
-  def action = __do{}
+  var init = 0
+  def action = __do{
+    if (init == 0) {
+      sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, commodity))
+      init = 1
+    } else if (init == 1) {
+      if (markets.get(commodity).isDefined) {
+        sendMessage(MarketSellMessage(this.id, markets(commodity), commodity, units, 0))
+        init = 2
+      }
+    } else {
+
+    }
+  }
   override def price(dummy: Commodity) = Some(p)
 }
 
 
-case class Trader(commodity: Commodity,
-                  desired_inventory: Int,
-                  shared: Simulation) extends
-  SimO(shared) with SimpleSim {
+/*case class Trader(commodity: Commodity,
+                  desired_inventory: Int) extends SimO with SimpleSim {
   {
     shared.market(commodity).add_seller(this);
   }
 
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]) = {
-    val n = Trader(commodity, desired_inventory, _shared);
-    copy_state_to(n);
+  override def mycopy():Trader = {
+    val n = Trader(commodity, desired_inventory)
+    copy_state_to(n)
     n
   }
 
@@ -55,17 +64,16 @@ case class Trader(commodity: Commodity,
     }
 }
 
-
+*/
 
 // A regular buyer for a sandbox simulation
+/*
 case class Buyer(commodity: Commodity,
-                 units_per_tick: () => Int,
-                 shared: Simulation) extends SimO(shared) with SimpleSim {
+                 units_per_tick: () => Int) extends SimO() with SimpleSim {
 
-  def mycopy(_shared: Simulation,
-             _substitution: collection.mutable.Map[SimO, SimO]) = {
-    val n = Buyer(commodity, units_per_tick, _shared)
-    copy_state_to(n);
+  override def mycopy():Buyer = {
+    val n = Buyer(commodity, units_per_tick)
+    copy_state_to(n)
     n
   }
 
@@ -74,24 +82,24 @@ case class Buyer(commodity: Commodity,
         market_buy_order_now(shared.timer, this, units_per_tick());
     }
 }
+*/
 
 
+class Farm extends Factory(
+  ProductionLineSpec(1, List((Land, 1)), List(), (Wheat, 20), 4))
 
-class Farm(s: Simulation) extends Factory(
-  ProductionLineSpec(1, List((Land, 1)), List(), (Wheat, 20), 4), s)
+class Mill extends Factory(
+  ProductionLineSpec(1, List(), List((Wheat, 10)), (Flour, 10), 1))
 
-class Mill(s: Simulation) extends Factory(
-  ProductionLineSpec(1, List(), List((Wheat, 10)), (Flour, 10), 1), s)
+class Cinema extends Factory(
+  ProductionLineSpec(2, List(), List(), (MovieTicket, 2000), 1))
 
-class Cinema(s: Simulation) extends Factory(
-  ProductionLineSpec(2, List(), List(), (MovieTicket, 2000), 1), s)
+class CattleFarm extends Factory(
+  ProductionLineSpec(1, List((Land, 1)), List(), (Beef, 5), 6))
 
-class CattleFarm(s: Simulation) extends Factory(
-  ProductionLineSpec(1, List((Land, 1)), List(), (Beef, 5), 6), s)
-
-class McDonalds(s: Simulation) extends Factory(
+class McDonalds extends Factory(
   ProductionLineSpec(1, List(), List((Flour, 10), (Beef, 5)),
-                 (Burger, 10), 2), s)
+                 (Burger, 10), 2))
 
 
 

@@ -1,9 +1,10 @@
 import org.scalatest._
 
+/*
 class OrderBookSpec extends FlatSpec {
   import Markets._
   import Owner._
-  import Securities._
+  import Commodities._
 
   "Time ordering" should "be respected for asks" in {
     val s = new Owner();
@@ -57,5 +58,5 @@ class OrderBookSpec extends FlatSpec {
            OB_Line(Some(1000.0),2,6,None,b),
            OB_Line(Some(1000.0),3,8,None,b)));
   }
-}
+}*/
 

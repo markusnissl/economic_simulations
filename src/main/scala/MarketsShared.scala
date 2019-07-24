@@ -1,5 +1,6 @@
 package Markets;
-import Owner._;
+import Owner._
+import Simulation.AgentId;
 
 
 trait MarketMatchingUtilities[L] {
@@ -75,7 +76,7 @@ trait MarketSelling {
   // #units currently offered on the market
   //def offered(): Int;
 
-  def market_buy_order_now(time: Int, buyer: Owner, units: Int) : Int;
+  def market_buy_order_now(time: Int, buyer: AgentId, units: Int) : Int;
   def  limit_buy_order_now(time: Int, buyer: Owner, units: Int) : Int;
 }
 

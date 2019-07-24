@@ -1,7 +1,7 @@
 package Markets;
 import Owner._;
 import Securities._;
-
+/*
 
 /** An order; an entry line in an order book. Does not specify whether it's
     a buy or sell order, but `OB_Line` can be used for either.
@@ -46,7 +46,7 @@ class OrderBook(
   var bid_orderbook = List[OB_Line]()
   var ask_orderbook = List[OB_Line]()
 
-  def mycopy() = {
+  def mycopy():OrderBook = {
     val ob = new OrderBook(security);
     ob.bid_orderbook = bid_orderbook;
     ob.ask_orderbook = ask_orderbook;
@@ -182,6 +182,4 @@ class OrderBook(
     println("(%9.2f)    (%3d)".format(bid_vwap, bid_vol));
     println("----------------------------------------------------");
   }
-}
-
-
+}*/

@@ -1,6 +1,6 @@
 import org.scalatest._
 import Owner._
-import Securities._
+import Commodities._
 
 
 class OwnerSpec extends FlatSpec {
