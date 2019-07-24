@@ -1,6 +1,5 @@
 package Simulation.SimLib.OB_Sims
 import code._
-import Simulation._
 import Markets._
 import Securities._
 import Commodities._
@@ -290,7 +289,6 @@ class Arbitrageur(
 
 
 class OBExample {
-  import Simulation._
   import Markets._
   import Owner._
 

@@ -28,13 +28,13 @@ trait Sim {
   }
 
   /** Runs until at most time `until`. */
-  def run_until(until: T) : Option[T] = {
+  def run_until(until: T) = {
     val (a, b, next_goal_time) =
       exec[T](algo_c, current_pos, current_time, until);
 
     current_pos = a;
     current_time = b;
-    next_goal_time
+    (this, next_goal_time)
   }
 }
 

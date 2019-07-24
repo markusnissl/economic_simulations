@@ -148,8 +148,12 @@ package Markets {
         sendMessage(MarketBuyOrderMessage(this.id, buyer, s._1, commodity, u, s._3))
         sendMessage(MarketBuySellerMessage(this.id, s._1, buyer, commodity, u, s._3))
         var x = goods.find(_._1 == s._1).get
-        var y = (x._1,x._2-u,x._3)
-        goods = y :: goods.filter(_._1 != s._1)
+        if (x._2 - u <= 0) {
+          goods = goods.filter(_._1 != s._1)
+        } else {
+          var y = (x._1,x._2-u,x._3)
+          goods = y :: goods.filter(_._1 != s._1)
+        }
         //s.sell_to(time, buyer, commodity, u)
       }
       val sold = units - left_over

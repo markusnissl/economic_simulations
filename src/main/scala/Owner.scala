@@ -56,7 +56,7 @@ package Owner {
 
   /** A legal person who manages its own finances and owns capital and inventory.
     */
-  class Owner() {
+  class Owner() extends Serializable {
     /** It is safe to directly modify this.
       * Changes the balance, of course.
       */
@@ -216,7 +216,9 @@ package Owner {
       if (!inventory.contains(item)) init_inv(item);
       recalculate_inv_avg_cost(item, units, unit_cost);
 
+
       inventory(item) += units;
+
     }
 
     /**
@@ -296,7 +298,7 @@ package Owner {
     /**
       * Logic for processing received messages.
       */
-    final def handleMessages(): Unit = {
+    final def handleMessages(): Owner = {
       for (msg <- receivedMessages) {
         val handler = messageListener.get(msg.getClass.getSimpleName)
         if (handler.isDefined) {
@@ -308,6 +310,7 @@ package Owner {
           }
         }
       }
+      this
     }
 
     setMessageHandler("TransferMoneyMessage", (m:Message) => {

@@ -2,8 +2,8 @@ package Simulation.Factory
 
 import code._
 import Owner._
-import Simulation._
 import Commodities._
+import Simulation.{JobFireMessage, JobHireMessage, JobHiredMessage, MarketBuyMessage, MarketRequest, MarketSellMessage, Message, ReferencePerson, ResponseMarketData, Sim, SimO}
 import Timeseries.Timeseries
 
 
@@ -36,7 +36,7 @@ case class ProductionLine(pls: ProductionLineSpec,
                           // fraction of theoretical capacity currently achieved
                           private var costs_consumables: Double = 0.0 // of current production run
 
-                         ) extends Sim {
+                         ) extends Sim with Serializable {
 
   init(start_time)
 
@@ -118,13 +118,13 @@ case class HR(private val o: Owner,
   def salary_cost():Int = salary * employees.length
 
   protected def hire_one() {
-    o.sendMessage(JobHireMessage(o.id, ENVIRONMENT_ID))
+    o.sendMessage(JobHireMessage(o.id, _root_.Simulation.ENVIRONMENT_ID))
     /*if (shared.arbeitsmarkt.length > 0)
       employees.push(shared.arbeitsmarkt.pop.asInstanceOf[Person]);*/
   }
 
   protected def fire_one() {
-    o.sendMessage(JobFireMessage(o.id, ENVIRONMENT_ID, employees.pop.id))
+    o.sendMessage(JobFireMessage(o.id, _root_.Simulation.ENVIRONMENT_ID, employees.pop.id))
     //shared.arbeitsmarkt.push(employees.pop);
   }
 
@@ -398,12 +398,12 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
       __do {
         // Get market ids from environment
         for (x <- pls.required) {
-          sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, x._1))
+          sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, x._1))
         }
         for (x <- pls.consumed) {
-          sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, x._1))
+          sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, x._1))
         }
-        sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, pls.produced._1))
+        sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, pls.produced._1))
         init = false
       }
     ),
@@ -439,15 +439,15 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
     }
   )
 
-  override def run_until(until: Int): Option[Int] = {
+  override def run_until(until: Int): (Sim, Option[Int]) = {
     // this ordering is important, so that bulk buying
     // happens before consumption.
-    val nxt1 = super.run_until(until).get
+    val nxt1 = super.run_until(until)._2.get
     if (pl.nonEmpty) {
-      val nxt2 = pl.map(_.run_until(until).get).min
-      Some(math.min(nxt1, nxt2)) // compute a meaningful next time
+      val nxt2 = pl.map(_.run_until(until)._2.get).min
+      (this, Some(math.min(nxt1, nxt2))) // compute a meaningful next time
     } else {
-      Some(nxt1)
+      (this, Some(nxt1))
     }
   }
 

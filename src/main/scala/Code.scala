@@ -1,7 +1,7 @@
 package code {
 
 
-abstract class Instruction
+abstract class Instruction extends Serializable
 
 
 /** An instruction that can be directly executed. */
@@ -192,10 +192,12 @@ def exec[T : Numeric](
     }
   }
 
+
   while((pos < program.length) && lte(next_time, end_time)) {
     time = next_time;
     pos = program(pos).exec(pos);
   }
+
 
   val nt = if(pos < program.length) {
              assert(program(pos).isInstanceOf[__wait[_]]);
@@ -271,7 +273,7 @@ def exec[T : Numeric](
 */
 def execp[S, T: Numeric](
   sims       : Seq[S],
-  exec_f     : (S, T) => Option[T], // returns next_goal_time
+  exec_f     : (S, T) => (S,Option[T]), // returns next_goal_time
   start_time : T,
   end_time   : T
 ) = {
@@ -282,7 +284,7 @@ def execp[S, T: Numeric](
   while(lte(highwater, end_time))
   {
     // pick the smallest next time.
-    highwater = sims.map(s => exec_f(s, highwater).get).min;
+    highwater = sims.map(s => exec_f(s, highwater)._2.get).min;
   }
 
   Some(highwater)

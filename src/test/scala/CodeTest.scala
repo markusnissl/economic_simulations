@@ -29,8 +29,8 @@ case class ExecSimDouble(prog: Vector[SimpleInstruction]) {
 
 
 class CodeSpec extends FlatSpec {
-  def execf(s: ExecSim, u: Int) = s.exec(u)
-  def execfd(s: ExecSimDouble, u: Double) = s.exec(u)
+  def execf(s: ExecSim, u: Int) = (s, s.exec(u))
+  def execfd(s: ExecSimDouble, u: Double) = (s, s.exec(u))
   def wprog[T](w: T) = compile(__forever(__wait(w)));
 
   "exec" should "stop after the last instruction that can still be finished no later then the end time" in {

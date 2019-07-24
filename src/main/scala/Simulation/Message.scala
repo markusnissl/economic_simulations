@@ -1,18 +1,33 @@
 package Simulation
 
+import java.util.UUID
+
 import Commodities.Commodity
 import Owner.{ITEM_T, SalesRecord}
 import Timeseries.Timeseries
 
-abstract class Message {
+
+abstract class Message extends Serializable {
   val senderId: AgentId
   val receiverId: AgentId
+  var sessionId: String = UUID.randomUUID().toString
+
+  override def toString: String = {
+    return "Message: " + senderId + " -> " + receiverId + "("+ sessionId +")"
+  }
 }
 
 //Market Management
 case class MarketRequest(override val senderId: AgentId, override val receiverId: AgentId, item: Commodity) extends Message
 
-case class MarketResponse(override val senderId: AgentId, override val receiverId: AgentId, item: Commodity, marketId: AgentId) extends Message
+case class MarketResponse(override val senderId: AgentId, override val receiverId: AgentId, item: Commodity, marketId: AgentId) extends Message {
+  def this(message: MarketRequest, marketId: AgentId) {
+    this(message.receiverId, message.senderId, message.item, marketId)
+    sessionId = message.sessionId
+  }
+}
+
+case class MarketBuyMessage(override val senderId: AgentId, override val receiverId: AgentId, item: ITEM_T, units: Int) extends Message
 
 case class MarketBuyOrderMessage(override val senderId: AgentId, override val receiverId: AgentId, seller: AgentId, item: ITEM_T, units: Int, price: Double) extends Message
 
@@ -20,7 +35,6 @@ case class MarketBuySellerMessage(override val senderId: AgentId, override val r
 
 case class MarketSellMessage(override val senderId: AgentId, override val receiverId: AgentId, item: ITEM_T, units: Int, price: Double) extends Message
 
-case class MarketBuyMessage(override val senderId: AgentId, override val receiverId: AgentId, item: ITEM_T, units: Int) extends Message
 
 
 //Money Management

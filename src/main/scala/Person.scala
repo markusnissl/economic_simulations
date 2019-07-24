@@ -39,6 +39,7 @@ class Person(
     log = (units + "*" + consumable + "@" + current_time) :: log
   }
 
+
   var init = false
   protected def algo = __forever(
     __if(init)(
@@ -51,6 +52,8 @@ class Person(
     ),
     __do {
       if (active) {
+
+
         val food = if (GLOBAL.rnd.nextInt(2) == 0) Flour else Burger
 
         happiness -= 100; // hunger

@@ -1,9 +1,9 @@
 package Simulation.SimLib
 import code._
-import Simulation._
 import _root_.Simulation.Factory._
 import Markets._
 import Commodities._
+import Simulation.{MarketRequest, MarketSellMessage, SimO, SimpleSim}
 
 
 class Source(commodity: Commodity, units: Int, p: Int) extends SimO with SimpleSim {
@@ -23,7 +23,7 @@ class Source(commodity: Commodity, units: Int, p: Int) extends SimO with SimpleS
   var init = 0
   def action = __do{
     if (init == 0) {
-      sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, commodity))
+      sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, commodity))
       init = 1
     } else if (init == 1) {
       if (markets.get(commodity).isDefined) {
