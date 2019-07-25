@@ -39,8 +39,17 @@ class Person(
     log = (units + "*" + consumable + "@" + current_time) :: log
   }
 
+  def getName: String = id.toString
 
   var init = false
+
+  val referencePerson:ReferencePerson = new ReferencePerson(this, this.id+1)
+  var refName:String = _
+
+  def setRefName(s:String): Unit = {
+    refName = s
+  }
+
   protected def algo = __forever(
     __if(init)(
       __do {
@@ -50,10 +59,11 @@ class Person(
         sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, MovieTicket))
       }
     ),
+    //__syncMessage(() => referencePerson.sell(10,10)),
     __do {
+      println(refName)
+
       if (active) {
-
-
         val food = if (GLOBAL.rnd.nextInt(2) == 0) Flour else Burger
 
         happiness -= 100; // hunger
@@ -84,6 +94,16 @@ class Person(
   override def stat {
     print("(Person@" + happiness + " " + capital / 100 + ")  ")
   }
+
+  setMessageHandler("PersonNameRequest", (message: Message) => {
+    val mCast:PersonNameRequest = message.asInstanceOf[PersonNameRequest]
+    sendMessage(new PersonNameResponse(mCast, this.getName))
+  })
+
+  setMessageHandler("PersonSellRequest", (message: Message) => {
+    val mCast:PersonSellRequest = message.asInstanceOf[PersonSellRequest]
+    sendMessage(new PersonSellResponse(mCast))
+  })
 }
 
 

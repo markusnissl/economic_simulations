@@ -454,7 +454,7 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
 
   setMessageHandler("JobHiredMessage", (m: Message) => {
     val mCast = m.asInstanceOf[JobHiredMessage]
-    hr.employees.push(ReferencePerson(mCast.employeeId))
+    hr.employees.push(new ReferencePerson(this, mCast.employeeId))
     newEmployees += 1
   })
 

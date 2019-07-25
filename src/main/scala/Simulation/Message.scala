@@ -13,7 +13,7 @@ abstract class Message extends Serializable {
   var sessionId: String = UUID.randomUUID().toString
 
   override def toString: String = {
-    return "Message: " + senderId + " -> " + receiverId + "("+ sessionId +")"
+    return "Message: " + senderId + " -> " + receiverId + "(" + sessionId + ")"
   }
 }
 
@@ -36,7 +36,6 @@ case class MarketBuySellerMessage(override val senderId: AgentId, override val r
 case class MarketSellMessage(override val senderId: AgentId, override val receiverId: AgentId, item: ITEM_T, units: Int, price: Double) extends Message
 
 
-
 //Money Management
 case class TransferMoneyMessage(override val senderId: AgentId, override val receiverId: AgentId, amount: Int) extends Message
 
@@ -52,3 +51,22 @@ case class JobFireMessage(override val senderId: AgentId, override val receiverI
 case class RequestMarketData(override val senderId: AgentId, override val receiverId: AgentId, item: ITEM_T) extends Message
 
 case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: Timeseries[List[SalesRecord]]) extends Message
+
+
+// DEMO for proxy
+case class PersonSellRequest(override val senderId: AgentId, override val receiverId: AgentId, unit:Int, price:Int) extends Message
+case class PersonSellResponse(override val senderId: AgentId, override val receiverId: AgentId) extends Message {
+  def this(message: PersonSellRequest) {
+    this(message.receiverId, message.senderId)
+    sessionId = message.sessionId
+  }
+}
+
+case class PersonNameRequest(override val senderId: AgentId, override val receiverId: AgentId) extends Message
+
+case class PersonNameResponse(override val senderId: AgentId, override val receiverId: AgentId, name: String) extends Message {
+  def this(message: PersonNameRequest, name: String) {
+    this(message.receiverId, message.senderId, name)
+    sessionId = message.sessionId
+  }
+}

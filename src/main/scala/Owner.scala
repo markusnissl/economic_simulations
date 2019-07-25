@@ -251,7 +251,8 @@ package Owner {
     /**
       * Contains a map of message listeners
       */
-    protected var messageListener: Map[MESSAGE_TYPE, Message => Unit] = Map()
+    protected var messageListener: collection.mutable.Map[MESSAGE_TYPE, Message => Unit] = collection.mutable.Map()
+    protected var responseListener: collection.mutable.Map[String, Message => Unit] = collection.mutable.Map()
 
     /**
       * Sets the messages from the previous step to the agent
@@ -292,7 +293,17 @@ package Owner {
       * @param handler     function, which handles the message
       */
     final def setMessageHandler(messageType: MESSAGE_TYPE, handler: Message => Unit): Unit = {
-      messageListener = messageListener + (messageType -> handler)
+      messageListener += (messageType -> handler)
+    }
+
+    /**
+      * Sets a message response handler for a specific session id
+      *
+      * @param sessionId session of message you want to listen for a response
+      * @param handler     function, which handles the message
+      */
+    final def setMessageResponseHandler(sessionId: String, handler: Message => Unit): Unit = {
+      responseListener += (sessionId -> handler)
     }
 
     /**
@@ -300,7 +311,12 @@ package Owner {
       */
     final def handleMessages(): Owner = {
       for (msg <- receivedMessages) {
-        val handler = messageListener.get(msg.getClass.getSimpleName)
+        var handler = responseListener.get(msg.sessionId)
+        if (handler.isEmpty) {
+          handler = messageListener.get(msg.getClass.getSimpleName)
+        } else {
+          responseListener.remove(msg.sessionId)
+        }
         if (handler.isDefined) {
           val f = handler.get
           f(msg)

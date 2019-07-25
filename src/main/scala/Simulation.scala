@@ -219,7 +219,7 @@ class Simulation extends Serializable {
           println();
         }
       }
-      
+
       timer += 1;
     }
     println("STOP Simulation " + this);
