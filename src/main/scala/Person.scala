@@ -46,8 +46,9 @@ class Person(
   val referencePerson:ReferencePerson = new ReferencePerson(this, this.id+1)
   var refName:String = _
 
-  def setRefName(s:String): Unit = {
-    refName = s
+  //Demo function we want to call as proxy
+  private def sell(arg1: Int, arg2:Int): (Boolean,Boolean) = {
+    (true,false)
   }
 
   protected def algo = __forever(
@@ -60,8 +61,10 @@ class Person(
       }
     ),
     //__syncMessage(() => referencePerson.sell(10,10)),
+    __syncMessage(this, () => referencePerson.id, (result:Any) => {
+      println(result.asInstanceOf[(Boolean,Boolean)]._1)
+    }, x => x.asInstanceOf[Person].sell(10,10)),
     __do {
-      println(refName)
 
       if (active) {
         val food = if (GLOBAL.rnd.nextInt(2) == 0) Flour else Burger
@@ -103,6 +106,14 @@ class Person(
   setMessageHandler("PersonSellRequest", (message: Message) => {
     val mCast:PersonSellRequest = message.asInstanceOf[PersonSellRequest]
     sendMessage(new PersonSellResponse(mCast))
+  })
+
+  setMessageHandler("RequestMessage", (message: Message) => {
+    val mCast:RequestMessage = message.asInstanceOf[RequestMessage]
+
+    val result = mCast.call_f(this)
+    //this.sell(mCast.params.tail.head, mCast.params.tail.tail.head)
+    mCast.reply(this, result)
   })
 }
 

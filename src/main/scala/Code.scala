@@ -1,8 +1,8 @@
-import Simulation.Message
+import Simulation.{AgentId, Message, RequestMessage, ResponseMessage}
 package code {
 
   import Owner.Owner
-  import Simulation.Message
+  import Simulation.{AgentId, Message}
 
 
   abstract class Instruction extends Serializable
@@ -110,16 +110,19 @@ package code {
       Some((r.cond _, r.block))
   }
 
-  class __syncMessage(_x: () => (String, Message => Unit, Owner)) extends SugarInstruction {
-    val x:() => (String, Message => Unit, Owner) = _x
+  class __syncMessage(_sender: Owner, _receiver: () => AgentId, _callback_f: Any => Unit, _call_f: Any => Any) extends SugarInstruction {
+    val sender = _sender
+    val receiver = _receiver
+    val callback_f = _callback_f
+    val call_f = _call_f
   }
 
   object __syncMessage {
-    def apply(x: () => (String, Message => Unit, Owner)):__syncMessage = {
-      new __syncMessage(x)
+    def apply(_sender: Owner, _receiver: () => AgentId, _callback_f: Any => Unit, _call_f: Any => Any):__syncMessage = {
+      new __syncMessage(_sender, _receiver, _callback_f, _call_f)
     }
 
-    def unapply(sM: __syncMessage) = Some(sM.x)
+    def unapply(sM: __syncMessage) = Some((sM.sender, sM.receiver, sM.callback_f, sM.call_f))
   }
 
 
@@ -175,18 +178,21 @@ package object code {
           }
         }))
       }
-      case __syncMessage(x) => {
-        var m:Message = null
-        var cb: Message => Unit = null
+      case __syncMessage(sender, receiver, callback_f, call_f) => {
+        var m:ResponseMessage = null
+        var cb: Any => Unit = null
 
         var before = __do {
-            var z = x()
-            cb = z._2
-            z._3.setMessageResponseHandler(z._1, (msg:Message) => {
-              m = msg
+            var msg:Message = RequestMessage(sender.id, receiver(), call_f)
+            cb = callback_f
+            sender.setMessageResponseHandler(msg.sessionId, (responseMessage:Message) => {
+              m = responseMessage.asInstanceOf[ResponseMessage]
             })
+            sender.sendMessage(msg)
           }
-        var after = __do {cb(m)}
+        var after = __do {
+          cb(m.result)
+        }
 
         Vector(before) ++ compile(__dowhile(__wait(1))(m == null)) ++ Vector(after)
       }

@@ -3,7 +3,7 @@ package Simulation
 import java.util.UUID
 
 import Commodities.Commodity
-import Owner.{ITEM_T, SalesRecord}
+import Owner.{ITEM_T, Owner, SalesRecord}
 import Timeseries.Timeseries
 
 
@@ -52,9 +52,22 @@ case class RequestMarketData(override val senderId: AgentId, override val receiv
 
 case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: Timeseries[List[SalesRecord]]) extends Message
 
+// General message
+case class RequestMessage(override val senderId: AgentId, override val receiverId: AgentId, call_f: Any => Any) extends Message {
+
+  def reply(owner: Owner, returnValue:Any): Unit = {
+    val msg = ResponseMessage(receiverId, senderId, returnValue)
+    msg.sessionId = this.sessionId
+    owner.sendMessage(msg)
+  }
+}
+
+case class ResponseMessage(override val senderId: AgentId, override val receiverId: AgentId, result: Any) extends Message {}
+
 
 // DEMO for proxy
-case class PersonSellRequest(override val senderId: AgentId, override val receiverId: AgentId, unit:Int, price:Int) extends Message
+case class PersonSellRequest(override val senderId: AgentId, override val receiverId: AgentId, unit: Int, price: Int) extends Message
+
 case class PersonSellResponse(override val senderId: AgentId, override val receiverId: AgentId) extends Message {
   def this(message: PersonSellRequest) {
     this(message.receiverId, message.senderId)
