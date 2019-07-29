@@ -1,7 +1,7 @@
 package Simulation
 
 import Owner.Owner
-import code.{__forever, __syncMessage, __wait}
+import code.{__do, __forever, __syncMessage, __wait}
 
 
 
@@ -31,8 +31,13 @@ class TPerson extends SimO with IPerson {
   // FIXME: Test for two person a send to b and b to a
   val rPerson:RPerson = new RPerson(this, 7+this.id%2)
 
+  val callSell = rPerson.sell(10+this.id.toInt,10+this.id.toInt)
   protected def algo = __forever(
-    rPerson.sell(10+this.id.toInt,10+this.id.toInt),
+    callSell,
+    __do {
+      val result = callSell()
+      println("ALGO", result)
+    },
     __wait(1)
   )
 
@@ -44,15 +49,20 @@ class TPerson extends SimO with IPerson {
 }
 
 class RPerson(owner: Owner, id: AgentId) extends IPerson with Serializable {
+  var resultF: (Boolean, Boolean) = (false, false)
+
   case class sell(unit: Int, price: Double) extends __syncMessage(
     owner,
     () => id,
     (result: Any) => {
-      println(result)
-      println(result.asInstanceOf[(Boolean, Boolean)]._1)
+      resultF = result.asInstanceOf[(Boolean, Boolean)]
     },
     x => x.asInstanceOf[TPerson].sell(unit, price)()
-  )
+  ) {
+    def apply(): (Boolean, Boolean) = {
+      resultF
+    }
+  }
 }
 
 object MessagePassingExample {

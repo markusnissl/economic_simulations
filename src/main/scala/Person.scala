@@ -108,6 +108,7 @@ class Person(
     sendMessage(new PersonSellResponse(mCast))
   })
 
+
   setMessageHandler("RequestMessage", (message: Message) => {
     val mCast:RequestMessage = message.asInstanceOf[RequestMessage]
 
