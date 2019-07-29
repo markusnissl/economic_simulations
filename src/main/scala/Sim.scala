@@ -13,12 +13,13 @@ trait Sim {
   // END state
 
   protected def algo   : Instruction
-  private   var algo_c : Vector[SimpleInstruction] = compile(algo)
+  private   var algo_c : Vector[SimpleInstruction] = _
 
   /** Call from the constructor in inheriting classes. */
   protected def init(start_time: T) {
     current_pos    = 0;
     current_time   = start_time;
+    algo_c = compile(algo)
   }
 
   protected def copy_state_to(_to: Sim) {
@@ -56,7 +57,9 @@ trait SimpleSim extends Sim {
 
 abstract class SimO(start_time: Int = 0) extends Seller with Sim {
 
-  init(start_time);
+  def init(): Unit = {
+    super[Sim].init(start_time)
+  }
 
   protected def copy_state_to(_to: SimO) = {
     super[Seller].copy_state_to(_to);

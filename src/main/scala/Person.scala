@@ -41,7 +41,7 @@ class Person(
 
   def getName: String = id.toString
 
-  var init = false
+  var initC = false
 
   val referencePerson:ReferencePerson = new ReferencePerson(this, this.id+1)
   var refName:String = _
@@ -52,9 +52,9 @@ class Person(
   }
 
   protected def algo = __forever(
-    __if(init)(
+    __if(initC)(
       __do {
-        init = true
+        initC = true
         sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, Flour))
         sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, Burger))
         sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, MovieTicket))

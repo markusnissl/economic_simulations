@@ -50,6 +50,13 @@ class Simulation extends Serializable {
     println("INIT Simulation " + this);
     sims = _sims;
 
+    for (s <- sims) {
+      s.init()
+    }
+    for (m <- market.values) {
+      m.init()
+    }
+
     //for(s <- sims) if(s.isInstanceOf[Person]) arbeitsmarkt.push(s);
     for (s <- sims if s.isInstanceOf[Person]) arbeitsmarkt.push(s.id);
 

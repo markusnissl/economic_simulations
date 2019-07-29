@@ -38,7 +38,10 @@ case class ProductionLine(pls: ProductionLineSpec,
 
                          ) extends Sim with Serializable {
 
-  init(start_time)
+
+  def init(): Unit = {
+    init(this.start_time)
+  }
 
   def mycopy(_o: Seller): ProductionLine = {
     val p = this.copy()
@@ -222,7 +225,9 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
       if (success) {
         if (newEmployees > pls.employees_needed) {
           newEmployees -= pls.employees_needed
-          pl = ProductionLine(pls, this, hr.salary, current_time) :: pl
+          val tmpPl = ProductionLine(pls, this, hr.salary, current_time)
+          tmpPl.init()
+          pl = tmpPl :: pl
         } else {
           hr.hire(pls.employees_needed)
         }
@@ -391,10 +396,10 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
     else None
   }
 
-  var init = true
+  var initC = true
 
   override protected def algo = __forever(
-    __if(init)(
+    __if(initC)(
       __do {
         // Get market ids from environment
         for (x <- pls.required) {
@@ -404,7 +409,7 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
           sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, x._1))
         }
         sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, pls.produced._1))
-        init = false
+        initC = false
       }
     ),
     __do {

@@ -20,15 +20,15 @@ class Source(commodity: Commodity, units: Int, p: Int) extends SimO with SimpleS
     n
   }
 
-  var init = 0
+  var initC = 0
   def action = __do{
-    if (init == 0) {
+    if (initC == 0) {
       sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, commodity))
-      init = 1
-    } else if (init == 1) {
+      initC = 1
+    } else if (initC == 1) {
       if (markets.get(commodity).isDefined) {
         sendMessage(MarketSellMessage(this.id, markets(commodity), commodity, units, 0))
-        init = 2
+        initC = 2
       }
     } else {
 
