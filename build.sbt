@@ -17,3 +17,6 @@ libraryDependencies  ++= Seq(
 )
 
 resolvers += "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
+
+resolvers += Resolver.sonatypeRepo("snapshots")
+libraryDependencies += "ch.epfl.data" %% "squid" % "0.4.0-SNAPSHOT"
