@@ -5,12 +5,12 @@ import IR.Predef._
 
 case class Message[A,R](mtd: NonLocalMethod[A,R], arg: OpenCode[A])
 
-sealed abstract class Algo[A](implicit tpe: CodeType[A])
+sealed abstract class Algo[A](implicit val tpe: CodeType[A])
 case class Forever(body: Algo[Unit]) extends Algo[Unit]
 case class Send[R](actorRef: OpenCode[runtime.Actor], msg: Message[_,R]) extends Algo[Unit]
-case class Foreach[A: CodeType](ls: OpenCode[List[A]], f: Variable[A] => Algo[Unit]) extends Algo[Unit]
+case class Foreach[E](ls: OpenCode[List[E]], f: Variable[E] => Algo[Unit])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
-case class LetBinding[A: CodeType, B: CodeType](bound: Variable[A], value: OpenCode[A], body: Algo[B]) extends Algo[B]
+case class LetBinding[V: CodeType, A: CodeType](bound: Variable[V], value: OpenCode[V], body: Algo[A]) extends Algo[A]
 
 sealed abstract class Method[A,R] {
   val sym: IR.MtdSymbol
