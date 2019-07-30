@@ -8,7 +8,7 @@ package object GLOBAL {
   var silent = false
   val rnd = util.Random
 
-  val RUN_SPARK = true
+  val RUN_SPARK = false
 
   def mapopt[A,B](l: List[A], f: A => Option[B]) : List[B] =
     l.flatMap((a: A) => f(a) match {

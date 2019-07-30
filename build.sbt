@@ -2,7 +2,7 @@ lazy val root = (project in file(".")).settings(
   name := "economic_simulations",
   organization := "ch.epfl.data",
   version := "1.0",
-  scalaVersion := "2.11.8"
+  scalaVersion := "2.12.8"
 )
 
 // libraryDependencies += "com.quantifind" %% "wisp" % "0.0.4"

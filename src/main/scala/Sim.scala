@@ -13,7 +13,7 @@ trait Sim {
   // END state
 
   protected def algo   : Instruction
-  private   var algo_c : Vector[SimpleInstruction] = _
+  var algo_c : Vector[SimpleInstruction] = _
 
   /** Call from the constructor in inheriting classes. */
   protected def init(start_time: T) {
