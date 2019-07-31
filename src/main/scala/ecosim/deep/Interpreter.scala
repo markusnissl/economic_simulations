@@ -1,6 +1,9 @@
 package ecosim.deep
 
+import _root_.Simulation.{RequestMessage2, RequestMessage, SimO}
 import code.{Instruction, __do, __forever, __wait}
+import ecosim.runtime.Actor
+import ecosim.example.ex1.Market
 
 object Interpreter {
 
@@ -9,21 +12,6 @@ object Interpreter {
   case class Assignment[V: CodeType](v: Variable[V], arg: V)(implicit val V: CodeType[V])
 
   def apply[A: CodeType](algo: Algo[A], ass: List[Assignment[_]]): Instruction = algo match {
-    case ScalaCode(cde) => {
-      __do {
-        bindAll(ass, cde).evalClosed
-      }
-      //bindAll(ass, cde).evalClosed
-    }
-    case fe: Foreach[b] =>
-      import fe.E
-      __do {
-        val ls = bindAll(ass, fe.ls).evalClosed
-        val v = Variable[b]
-        val al = fe.f(v)
-        ls.foreach { e => apply(al, Assignment(v, e) :: ass) }
-        // Just for now
-      }
     case Forever(bdy@_*) => {
       var l = List[Instruction]()
       for (el <- bdy) {
@@ -33,6 +21,47 @@ object Interpreter {
     }
     case Wait(cde) => {
       __wait(bindAll(ass, cde).evalClosed)
+    }
+    case CallMethod(methodName) => {
+      __do {
+        println("Cannot call method")
+      }
+    }
+    case Send(actorRef, msg) => {
+      __do {
+        val actor:Actor = bindAll(ass, actorRef).evalClosed
+        val a = ass.head.v.asInstanceOf[Variable[Actor]]
+        val farmer:SimO = bindAll(ass, code"$a").evalClosed
+        val methodName = msg.mtd.sym.asMethodSymbol.name.toString()
+        val args = bindAll(ass, msg.arg).evalClosed
+        println(methodName, args)
+        //val sendData = code"$actorRef.sell(12)"
+        //println(sendData)
+        //farmer.sendMessage(RequestMessage(farmer.id, actor.id, ))
+        farmer.sendMessage(RequestMessage2(farmer.id, actor.id, methodName, args))
+        println(farmer.id, actor.id)
+
+        println("Cannot send message")
+      }
+    }
+    case fe: Foreach[b] =>
+      import fe.E
+      //TODO: this foreach implementation is not compatible to do the operation stepwise
+      __do {
+        val ls = bindAll(ass, fe.ls).evalClosed
+        val v = Variable[b]
+        val al = fe.f(v)
+        ls.foreach { e => apply(al, Assignment(v, e) :: ass) }
+      }
+    case ScalaCode(cde) => {
+      __do {
+        bindAll(ass, cde).evalClosed
+      }
+    }
+    case LetBinding(bound, value, body) => {
+      __do {
+        println("Cannot do binding")
+      }
     }
   }
 

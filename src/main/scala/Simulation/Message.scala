@@ -53,6 +53,8 @@ case class RequestMarketData(override val senderId: AgentId, override val receiv
 case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: Timeseries[List[SalesRecord]]) extends Message
 
 // General message
+case class RequestMessage2(override val senderId: AgentId, override val receiverId: AgentId, methodName:String, args:Any*) extends Message
+
 case class RequestMessage(override val senderId: AgentId, override val receiverId: AgentId, call_f: Any => Any) extends Message {
 
   def reply(owner: Owner, returnValue:Any): Unit = {

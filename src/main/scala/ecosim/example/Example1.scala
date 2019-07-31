@@ -1,15 +1,20 @@
 package ecosim.example.ex1
 
+import ecosim.deep.Interpreter.Assignment
 import ecosim.runtime._
 import ecosim.sim
 
 @sim
 class Market extends Actor {
   var goods: List[String] = Nil
+
+  def sell(unit: Int): Unit = {
+    println(unit)
+  }
 }
 
 @sim
-class Farmer(market: Market) extends Actor {
+class Farmer(val market: Market) extends Actor {
   var happiness = 0
   var peers: List[Farmer] = Nil
 
@@ -34,6 +39,7 @@ object ManualEmbedding extends App {
   //println(c)
   //println(codeTypeOf[List[Double]])
 
+  val marketSell = NonBlockingMethod(IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"println($arg)"))
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
     Nil,
@@ -54,7 +60,7 @@ object ManualEmbedding extends App {
           Send[Unit](code"$p", Message[(Actor, Int), Unit](notifySym, code"($farmerSelf, $farmerSelf.happiness)"))
         )
     ) :: Nil,
-    Forever(ScalaCode(code"println(5)"), Wait(code"1")),
+    Forever(ScalaCode(code"println(5)"), Send(code"$farmerSelf.market", Message[Int, Unit](marketSell, code"10")), Wait(code"1")),
     farmerSelf)
 
   val simulation = Simulation(market :: farmer :: Nil, code"val m = new Market; List(m, new Farmer(m))")
@@ -76,8 +82,12 @@ object ManualEmbedding extends App {
   simu.init(actors)
 
   actors.foreach(x => x match {
-    case f: Farmer => f.algo_c = _root_.code.compile(Interpreter(farmer.main, Nil))
-    case m: Market => m.algo_c = _root_.code.compile(Interpreter(market.main, Nil))
+    case f: Farmer =>  {
+      f.algo_c = _root_.code.compile(Interpreter(farmer.main, Assignment(farmerSelf, f) :: Nil))
+    }
+    case m: Market => {
+      m.algo_c = _root_.code.compile(Interpreter(market.main, Nil))
+    }
   })
 
   simu.run(10)
