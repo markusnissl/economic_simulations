@@ -9,7 +9,13 @@ class Market extends Actor {
   var goods: List[String] = Nil
 
   def sell(unit: Int): Unit = {
-    println(unit)
+    println("sell:")
+    println("Market sells: " + unit)
+  }
+
+  def sell2(unit: Int, products:List[Int]): Unit = {
+    println("sell2:", unit)
+    products.foreach(println)
   }
 }
 
@@ -39,11 +45,13 @@ object ManualEmbedding extends App {
   //println(c)
   //println(codeTypeOf[List[Double]])
 
-  val marketSell = NonBlockingMethod(IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"println($arg)"))
+  val marketSell = NonBlockingMethod[Int](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("sell:"); println("Market sells: " + $arg)"""))
+  val marketSell2 = NonBlockingMethod[(Int,List[Int])](IR.methodSymbol[Market]("sell2"), (arg: Variable[(Int,List[Int])]) => ScalaCode(code"""println("sell2:", $arg._1); $arg._2.foreach(println)"""))
+
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
     Nil,
-    ScalaCode(code"()"),
+    Forever(CallMethod(marketSell, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
     Variable[Market])
 
   val farmerSelf = Variable[Farmer]
@@ -61,6 +69,7 @@ object ManualEmbedding extends App {
         )
     ) :: Nil,
     Forever(ScalaCode(code"println(5)"), Send(code"$farmerSelf.market", Message[Int, Unit](marketSell, code"10")), Wait(code"1")),
+    //Forever(ScalaCode(code"println(5)"), Send(code"$farmerSelf.market", Message[(Int,List[Int]), Unit](marketSell2, code"(10,List(1,2,3))")), Wait(code"1")),
     farmerSelf)
 
   val simulation = Simulation(market :: farmer :: Nil, code"val m = new Market; List(m, new Farmer(m))")
@@ -90,7 +99,7 @@ object ManualEmbedding extends App {
     }
   })
 
-  simu.run(10)
+  simu.run(5)
 
   val c: OpenCode[Int] = code"List(1,2,$farmerSelf).size"
   println(c)
@@ -98,5 +107,4 @@ object ManualEmbedding extends App {
   val f: Farmer => Int = code"($farmerSelf: Farmer) => $c".unsafe_asClosedCode.run
   println(code"($farmerSelf: Farmer) => $c")
   println(f(new Farmer(new Market)))
-
 }

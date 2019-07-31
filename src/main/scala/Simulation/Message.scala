@@ -5,6 +5,7 @@ import java.util.UUID
 import Commodities.Commodity
 import Owner.{ITEM_T, Owner, SalesRecord}
 import Timeseries.Timeseries
+import ecosim.deep.IR
 
 
 abstract class Message extends Serializable {
@@ -53,7 +54,7 @@ case class RequestMarketData(override val senderId: AgentId, override val receiv
 case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: Timeseries[List[SalesRecord]]) extends Message
 
 // General message
-case class RequestMessage2(override val senderId: AgentId, override val receiverId: AgentId, methodName:String, args:Any*) extends Message
+case class RequestMessage2(override val senderId: AgentId, override val receiverId: AgentId, methodName:IR.MtdSymbol, args:Any) extends Message
 
 case class RequestMessage(override val senderId: AgentId, override val receiverId: AgentId, call_f: Any => Any) extends Message {
 

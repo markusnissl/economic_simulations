@@ -8,7 +8,7 @@ case class Message[A,R](mtd: NonLocalMethod[A,R], arg: OpenCode[A])
 sealed abstract class Algo[A](implicit val tpe: CodeType[A])
 case class Forever(body: Algo[Unit]*) extends Algo[Unit]
 case class Wait(cde: OpenCode[Int]) extends Algo[Unit]
-case class CallMethod(sym: IR.MtdSymbol) extends Algo[Unit]
+case class CallMethod[E, R: CodeType](mtd: Method[E,R], arg: OpenCode[E])(implicit val E: CodeType[E]) extends Algo[R]
 case class Send[R](actorRef: OpenCode[runtime.Actor], msg: Message[_,R]) extends Algo[Unit]
 case class Foreach[E](ls: OpenCode[List[E]], f: Variable[E] => Algo[Unit])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]

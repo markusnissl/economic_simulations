@@ -22,25 +22,25 @@ object Interpreter {
     case Wait(cde) => {
       __wait(bindAll(ass, cde).evalClosed)
     }
-    case CallMethod(methodName) => {
-      __do {
-        println("Cannot call method")
-      }
+    case cM: CallMethod[b,c] => {
+      import cM.E
+
+      val arg = bindAll(ass, cM.arg).evalClosed
+      val v = Variable[b]
+      val mBody:Algo[_] = cM.mtd.body(v)
+
+      apply(mBody, Assignment(v,arg)::ass)
     }
     case Send(actorRef, msg) => {
       __do {
         val actor:Actor = bindAll(ass, actorRef).evalClosed
         val a = ass.head.v.asInstanceOf[Variable[Actor]]
         val farmer:SimO = bindAll(ass, code"$a").evalClosed
-        val methodName = msg.mtd.sym.asMethodSymbol.name.toString()
+        val methodName = msg.mtd.sym
         val args = bindAll(ass, msg.arg).evalClosed
-        println(methodName, args)
-        //val sendData = code"$actorRef.sell(12)"
-        //println(sendData)
-        //farmer.sendMessage(RequestMessage(farmer.id, actor.id, ))
-        farmer.sendMessage(RequestMessage2(farmer.id, actor.id, methodName, args))
-        println(farmer.id, actor.id)
 
+        farmer.sendMessage(RequestMessage2(farmer.id, actor.id, methodName, args))
+        //TODO: if I understand it correctly, the message interpretation at the target has to be also interpreted
         println("Cannot send message")
       }
     }
