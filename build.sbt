@@ -9,9 +9,9 @@ lazy val root = (project in file(".")).settings(
 
 libraryDependencies  ++= Seq(
 //  "com.github.fommil.netlib" % "all" % "1.1.2",
-  "org.scalanlp" %% "breeze" % "0.12",
+  "org.scalanlp" %% "breeze" % "0.13.2",
 //  "org.scalanlp" %% "breeze-natives" % "0.12",
-  "org.scalanlp" %% "breeze-viz" % "0.12",
+  "org.scalanlp" %% "breeze-viz" % "0.13.2",
   "org.scalatest" %% "scalatest" % "3.0.0" % "test",
   "org.apache.spark" %% "spark-core" % "2.4.3"
 )
