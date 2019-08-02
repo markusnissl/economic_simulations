@@ -12,11 +12,14 @@ class Actor extends SimO {
 
   override def algo: Instruction = __do{}
 
+  var returnValue = false
   setMessageHandler("RequestMessageInter", (message: Message) => {
     //Ignore warning, handled by fragment in logic
     //TODO: remove code from here
     val mCast = message.asInstanceOf[RequestMessageInter[Any,Any]]
-    mCast.reply(this, true)
+    returnValue = !returnValue
+    println("returning", returnValue)
+    mCast.reply(this, returnValue)
   })
 
   setMessageHandler("ResponseMessageInter", (message: Message) => {

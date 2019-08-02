@@ -9,7 +9,9 @@ object Interpreter {
 
   import IR.Predef._
 
-  case class Assignment[V: CodeType](v: Variable[V], var arg: V)(implicit val V: CodeType[V])
+  class Assignment[V: CodeType](val v: Variable[V], arg: => V)(implicit val V: CodeType[V]) {
+    def getArg: V = arg
+  }
 
   // TODO: redefine callback handling for not passing callback forward where not needed
   def apply[A: CodeType](algo: Algo[A], ass: List[Assignment[_]], callback: (A => Unit) = null): (Instruction, List[Assignment[_]]) = algo match {
@@ -48,8 +50,8 @@ object Interpreter {
       val v = Variable[b]
       val mBody: Algo[A] = meth.body(v)
 
-      apply(mBody, Assignment(v, arg) :: ass, (value:A) => {
-        println("Got result", value)
+      apply(mBody, (new Assignment(v, arg)) :: ass, (value:A) => {
+        println("Got result CMC", value)
       })
     }
     case cM: CallMethod[b, c] => {
@@ -59,7 +61,7 @@ object Interpreter {
       val v = Variable[b]
       val mBody: Algo[A] = cM.mtd.body(v)
 
-      apply(mBody, Assignment(v, arg) :: ass, (value:A) => {
+      apply(mBody, (new Assignment(v, arg)) :: ass, (value:A) => {
         println("Got result", value)
       })
     }
@@ -101,6 +103,7 @@ object Interpreter {
             if (callback != null) {
               callback(responseMessage.arg)
             }
+            responseMessage = null
           }
         )
       )
@@ -119,7 +122,7 @@ object Interpreter {
         val al:Algo[A] = fe.f(v)
 
         ls.foreach { e =>
-          var x = apply(al, Assignment(v, e) :: newAss, null)
+          var x = apply(al, (new Assignment(v, e)) :: newAss, null)
           // Remove added assignment for e
           newAss = x._2.tail
         }
@@ -151,11 +154,11 @@ object Interpreter {
         //This does not work because of type, therefore replace assignment with new value
         //var oldAss = oldAssOption.get
         //oldAss.arg = valueInter
-        var newAss = ass.map(x => (if (x.v == bound) Assignment(bound, valueInter) else x))
+        var newAss = ass.map(x => (if (x.v == bound) (new Assignment(bound, valueInter)) else x))
         apply(body, newAss, callback)
       } else {
         //Assignment only for this "block"
-        var x = apply(body, Assignment(bound, valueInter) :: ass, callback)
+        var x = apply(body, (new Assignment(bound, valueInter)) :: ass, callback)
         (x._1, ass)
       }
     }
@@ -174,11 +177,11 @@ object Interpreter {
         //This does not work because of type, therefore replace assignment with new value
         //var oldAss = oldAssOption.get
         //oldAss.arg = valueInter
-        var newAss = ass.map(x => (if (x.v == lb2.bound) Assignment(lb2.bound, valueInter.asInstanceOf[A]) else x))
+        var newAss = ass.map(x => (if (x.v == lb2.bound) (new Assignment(lb2.bound, valueInter.asInstanceOf[A])) else x))
         algo2 = apply(lb2.body, newAss, callback)
       } else {
         //Assignment only for this "block"
-        val x = apply(lb2.body, Assignment(lb2.bound, valueInter.asInstanceOf[A]) :: ass, callback)
+        val x = apply(lb2.body, (new Assignment(lb2.bound, valueInter.asInstanceOf[A])) :: ass, callback)
         algo2 = (x._1, ass)
       }
 
@@ -192,7 +195,7 @@ object Interpreter {
       case Nil => BoundNil(cde)
       case (as: Assignment[v]) :: ass =>
         import as._
-        BoundCons(as.v, as.arg, bindAllInner(ass))
+        BoundCons(as.v, as.getArg, bindAllInner(ass))
     }
     bindAllInner(ass.reverse)
   }

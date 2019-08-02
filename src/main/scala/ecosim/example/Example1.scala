@@ -56,8 +56,8 @@ object ManualEmbedding extends App {
   //println(c)
   //println(codeTypeOf[List[Double]])
 
-  val marketSell = NonBlockingMethod[Int](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("sell:"); println("Market sells: " + $arg)"""))
-  val marketSellB = BlockingMethod[Int, Boolean](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("sell:"); println("Market sells: " + $arg); true"""))
+  val marketSell = NonBlockingMethod[Int](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("Market sells: " + $arg)"""))
+  val marketSellB = BlockingMethod[Int, Boolean](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("Market sells: " + $arg); true"""))
   val marketSell2 = NonBlockingMethod[(Int,List[Int])](IR.methodSymbol[Market]("sell2"), (arg: Variable[(Int,List[Int])]) => ScalaCode(code"""println("sell2:", $arg._1); $arg._2.foreach(println)"""))
 
   val marketSelf = Variable[Market]
@@ -75,7 +75,8 @@ object ManualEmbedding extends App {
       LetBinding(bindingTest, code"$bindingTest + 1", ScalaCodeWrapper(code"""println("Binding test:",$bindingTest)""")),
       LetBinding(bindingTest, code"$bindingTest + 1", ScalaCodeWrapper(code"""println("Binding test:",$bindingTest)""")),
       CallMethod[Int, Boolean](marketSellB, code"10"),
-      CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")
+      CallMethod(marketSell2, code"(10, List(1,2,3))"),
+      Wait(code"1")
     ),
     Variable[Market])
 
@@ -96,7 +97,7 @@ object ManualEmbedding extends App {
         )
     ) :: Nil,
     Forever(
-      LetBinding2[Boolean,Unit](testResult,Send[Int, Boolean](code"$farmerSelf.market", Message(marketSellB, code"500")), ScalaCodeWrapper(code"println($testResult)")),
+      LetBinding2[Boolean,Unit](testResult,Send[Int, Boolean](code"$farmerSelf.market", Message(marketSellB, code"500")), ScalaCodeWrapper(code"""println("TEST_VAR",$testResult)""")),
       Wait(code"1")
     ),
     //Forever(Send(code"$farmerSelf.market", Message[(Int,List[Int]), Unit](marketSell2, code"(10,List(1,2,3))")), Wait(code"1")),
@@ -112,14 +113,14 @@ object ManualEmbedding extends App {
 
   actors.foreach(x => x match {
     case f: Farmer =>  {
-      f.algo_c = _root_.code.compile(Interpreter(farmer.main, Assignment(farmerSelf, f) :: Nil)._1)
+      f.algo_c = _root_.code.compile(Interpreter(farmer.main, (new Assignment(farmerSelf, f)) :: Nil)._1)
     }
     case m: Market => {
-      m.algo_c = _root_.code.compile(Interpreter(market.main, Assignment(bindingTest, 0) :: Assignment(marketSelf, m) :: Nil)._1)
+      m.algo_c = _root_.code.compile(Interpreter(market.main, (new Assignment(bindingTest, 0)) :: (new Assignment(marketSelf, m)) :: Nil)._1)
     }
   })
 
-  simu.run(5)
+  simu.run(7)
 
   val c: OpenCode[Int] = code"List(1,2,$farmerSelf).size"
   println(c)
