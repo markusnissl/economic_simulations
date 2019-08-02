@@ -16,7 +16,7 @@ class Actor extends SimO {
     //Ignore warning, handled by fragment in logic
     //TODO: remove code from here
     val mCast = message.asInstanceOf[RequestMessageInter[Any,Any]]
-    mCast.reply(this, null)
+    mCast.reply(this, true)
   })
 
   setMessageHandler("ResponseMessageInter", (message: Message) => {

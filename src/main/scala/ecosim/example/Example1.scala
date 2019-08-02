@@ -80,6 +80,7 @@ object ManualEmbedding extends App {
     Variable[Market])
 
   val farmerSelf = Variable[Farmer]
+  val testResult = Variable[Boolean]
 
   val notifySym = BlockingMethod(IR.methodSymbol[Farmer]("tell"),
     (arg: Variable[(Actor, Int)]) => ScalaCode(code"$farmerSelf.happiness -= $arg._2"))
@@ -90,12 +91,15 @@ object ManualEmbedding extends App {
       State[List[Farmer]](IR.methodSymbol[Farmer]("peers"), code"Nil") :: Nil,
     NonBlockingMethod(IR.methodSymbol[Farmer]("notifyPeers"),
       (arg: Variable[Unit]) =>
-        Foreach[Farmer](code"$farmerSelf.peers", (p: Variable[Farmer]) =>
-          Send[Unit](code"$p", Message[(Actor, Int), Unit](notifySym, code"($farmerSelf, $farmerSelf.happiness)"))
+        Foreach[Farmer, Unit](code"$farmerSelf.peers", (p: Variable[Farmer]) =>
+          Send[(Actor, Int), Unit](code"$p", Message(notifySym, code"($farmerSelf, $farmerSelf.happiness)"))
         )
     ) :: Nil,
-    Forever(ScalaCode(code"println(5)"), Send(code"$farmerSelf.market", Message[Int, Unit](marketSell, code"500")), Wait(code"1")),
-    //Forever(ScalaCode(code"println(5)"), Send(code"$farmerSelf.market", Message[(Int,List[Int]), Unit](marketSell2, code"(10,List(1,2,3))")), Wait(code"1")),
+    Forever(
+      LetBinding2[Boolean,Unit](testResult,Send[Int, Boolean](code"$farmerSelf.market", Message(marketSellB, code"500")), ScalaCodeWrapper(code"println($testResult)")),
+      Wait(code"1")
+    ),
+    //Forever(Send(code"$farmerSelf.market", Message[(Int,List[Int]), Unit](marketSell2, code"(10,List(1,2,3))")), Wait(code"1")),
     farmerSelf)
 
   val simulation = Simulation(market :: farmer :: Nil, code"val m = new Market; List(m, new Farmer(m))")

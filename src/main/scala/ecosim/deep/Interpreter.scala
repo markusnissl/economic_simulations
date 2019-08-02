@@ -63,24 +63,26 @@ object Interpreter {
         println("Got result", value)
       })
     }
-    case Send(actorRef, msg) => {
+    case send: Send[b, c] => {
+      import send.E
+
       var blocking = false
       var requestMessage: RequestMessageInter[_, _] = null
       var sender: SimO = null
-      var responseMessage: ResponseMessageInter[_, _] = null
+      var responseMessage: ResponseMessageInter[A, _] = null
 
       var command = __doblock(
         __do {
-          val receiver: Actor = bindAll(ass, actorRef).evalClosed
+          val receiver: Actor = bindAll(ass, send.actorRef).evalClosed
           val tmpVar = ass.head.v.asInstanceOf[Variable[Actor]]
           sender = bindAll(ass, code"$tmpVar").evalClosed
 
-          val arg = bindAll(ass, msg.arg).evalClosed
+          val arg = bindAll(ass, send.msg.arg).evalClosed
 
-          requestMessage = RequestMessageInter(sender.id, receiver.id, msg.mtd, arg)
+          requestMessage = RequestMessageInter(sender.id, receiver.id, send.msg.mtd, arg)
           sender.sendMessage(requestMessage)
 
-          if (msg.mtd.isInstanceOf[BlockingMethod[_, _]]) {
+          if (send.msg.mtd.isInstanceOf[BlockingMethod[_, _]]) {
             blocking = true
           } else {
             blocking = false
@@ -90,19 +92,22 @@ object Interpreter {
         __if(blocking) (
           __do {
             sender.setMessageResponseHandler(requestMessage.sessionId, (response: _root_.Simulation.Message) => {
-              responseMessage = response.asInstanceOf[ResponseMessageInter[Any, Any]]
+              responseMessage = response.asInstanceOf[ResponseMessageInter[A,_]]
             })
           },
           __dowhile(__wait(1))(responseMessage == null),
           __do {
-            println("Got response!")
+            println("Got response!", responseMessage.arg)
+            if (callback != null) {
+              callback(responseMessage.arg)
+            }
           }
         )
       )
 
       (command, ass)
     }
-    case fe: Foreach[b] =>
+    case fe: Foreach[b, A] =>
       import fe.E
       //TODO: this foreach implementation is not compatible to do the operation stepwise
 
@@ -111,13 +116,16 @@ object Interpreter {
       var command = __do {
         val ls = bindAll(ass, fe.ls).evalClosed
         val v = Variable[b]
-        val al = fe.f(v)
+        val al:Algo[A] = fe.f(v)
 
         ls.foreach { e =>
-          //TODO: add callback
           var x = apply(al, Assignment(v, e) :: newAss, null)
           // Remove added assignment for e
           newAss = x._2.tail
+        }
+
+        if (callback != null) {
+          callback(())
         }
       }
       (command, newAss)
@@ -150,6 +158,31 @@ object Interpreter {
         var x = apply(body, Assignment(bound, valueInter) :: ass, callback)
         (x._1, ass)
       }
+    }
+    case lb2: LetBinding2[A,c] => {
+
+      var valueInter: Any = null
+
+      val algo1 = apply(lb2.value, ass, (result:A) => {
+        valueInter = result
+      })
+
+      var algo2:(Instruction, List[Assignment[_]]) = null
+
+      var oldAssOption = ass.find(x => x.v == lb2.bound)
+      if (oldAssOption.isDefined) {
+        //This does not work because of type, therefore replace assignment with new value
+        //var oldAss = oldAssOption.get
+        //oldAss.arg = valueInter
+        var newAss = ass.map(x => (if (x.v == lb2.bound) Assignment(lb2.bound, valueInter.asInstanceOf[A]) else x))
+        algo2 = apply(lb2.body, newAss, callback)
+      } else {
+        //Assignment only for this "block"
+        val x = apply(lb2.body, Assignment(lb2.bound, valueInter.asInstanceOf[A]) :: ass, callback)
+        algo2 = (x._1, ass)
+      }
+
+      (__doblock (algo1._1, algo2._1), algo2._2)
     }
   }
 
