@@ -53,17 +53,20 @@ object ManualEmbedding extends App {
 
   val handleMessage = Foreach(code"$marketSelf.getRequestMessages", (p: Variable[_root_.Simulation.RequestMessageInter[Any,Unit]]) => CallMethodC(code"$p.mtd", code"$p.arg"))
 
+  val bindingTest = Variable[Int]
+
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
     Nil,
     //Forever(handleMessage, CallMethod[Int, Unit](marketSell, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
-    Forever(handleMessage, CallMethod[Int, Boolean](marketSellB, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
+    Forever(handleMessage, LetBinding(bindingTest, code"$bindingTest + 1", ScalaCodeWrapper(code"""println("Binding test:",$bindingTest)""")), CallMethod[Int, Boolean](marketSellB, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
     Variable[Market])
 
   val farmerSelf = Variable[Farmer]
 
   val notifySym = BlockingMethod(IR.methodSymbol[Farmer]("tell"),
     (arg: Variable[(Actor, Int)]) => ScalaCode(code"$farmerSelf.happiness -= $arg._2"))
+
 
   val farmer = ActorType[Farmer]("Farmer",
     State[Int](IR.methodSymbol[Farmer]("happiness"), code"0") ::
@@ -91,7 +94,7 @@ object ManualEmbedding extends App {
       f.algo_c = _root_.code.compile(Interpreter(farmer.main, Assignment(farmerSelf, f) :: Nil))
     }
     case m: Market => {
-      m.algo_c = _root_.code.compile(Interpreter(market.main, Assignment(marketSelf, m) :: Nil))
+      m.algo_c = _root_.code.compile(Interpreter(market.main, Assignment(bindingTest, 0) :: Assignment(marketSelf, m) :: Nil))
     }
   })
 

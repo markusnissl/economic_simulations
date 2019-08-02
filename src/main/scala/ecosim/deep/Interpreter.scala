@@ -49,10 +49,10 @@ object Interpreter {
     }
     case Send(actorRef, msg) => {
       var blocking = false
-      var requestMessage: RequestMessageInter[_,_] = null
+      var requestMessage: RequestMessageInter[_, _] = null
       var sender: SimO = null
-      var responseMessage:ResponseMessageInter[_,_] = null
-      __doblock (
+      var responseMessage: ResponseMessageInter[_, _] = null
+      __doblock(
         __do {
           val receiver: Actor = bindAll(ass, actorRef).evalClosed
           val tmpVar = ass.head.v.asInstanceOf[Variable[Actor]]
@@ -63,7 +63,7 @@ object Interpreter {
           requestMessage = RequestMessageInter(sender.id, receiver.id, msg.mtd, arg)
           sender.sendMessage(requestMessage)
 
-          if (msg.isInstanceOf[BlockingMethod[_,_]]) {
+          if (msg.isInstanceOf[BlockingMethod[_, _]]) {
             blocking = true
           } else {
             blocking = false
@@ -71,8 +71,8 @@ object Interpreter {
         },
         __if(blocking) {
           __do {
-            sender.setMessageHandler(requestMessage.sessionId, (response:_root_.Simulation.Message) => {
-              responseMessage = response.asInstanceOf[ResponseMessageInter[Any,Any]]
+            sender.setMessageHandler(requestMessage.sessionId, (response: _root_.Simulation.Message) => {
+              responseMessage = response.asInstanceOf[ResponseMessageInter[Any, Any]]
             })
           }
           __dowhile(__wait(1))(responseMessage == null)
@@ -96,20 +96,28 @@ object Interpreter {
     case ScalaCode(cde) => {
       //TODO: Execute directly for now, may be in a do, try to add some ``dynamic`` steps into the compiled code
       bindAll(ass, cde).evalClosed
-      __do{}
+      __do {}
+    }
+    case ScalaCodeWrapper(cde) => {
+      __do {
+        bindAll(ass, cde).evalClosed
+      }
     }
     case LetBinding(bound, value, body) => {
-      __do {
-        println("Cannot do binding")
-      }
+      val valueInter = bindAll(ass, value).evalClosed
+      apply(body, Assignment(bound, valueInter) :: ass)
     }
   }
 
-  def bindAll[A: CodeType](ass: List[Assignment[_]], cde: OpenCode[A]): Bound[A] = ass match {
-    case Nil => BoundNil(cde)
-    case (as: Assignment[v]) :: ass =>
-      import as._
-      BoundCons(as.v, as.arg, bindAll(ass, cde))
+
+  def bindAll[A: CodeType](ass: List[Assignment[_]], cde: OpenCode[A]): Bound[A] = {
+    def bindAllInner(ass: List[Assignment[_]]): Bound[A] = ass match {
+      case Nil => BoundNil(cde)
+      case (as: Assignment[v]) :: ass =>
+        import as._
+        BoundCons(as.v, as.arg, bindAllInner(ass))
+    }
+    bindAllInner(ass.reverse)
   }
 
   sealed abstract class Bound[A] {
