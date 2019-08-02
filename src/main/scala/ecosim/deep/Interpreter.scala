@@ -11,13 +11,14 @@ object Interpreter {
 
   case class Assignment[V: CodeType](v: Variable[V], var arg: V)(implicit val V: CodeType[V])
 
-  def apply[A: CodeType](algo: Algo[A], ass: List[Assignment[_]]): (Instruction, List[Assignment[_]]) = algo match {
+  // TODO: redefine callback handling for not passing callback forward where not needed
+  def apply[A: CodeType](algo: Algo[A], ass: List[Assignment[_]], callback: (A => Unit) = null): (Instruction, List[Assignment[_]]) = algo match {
     case Forever(bdy@_*) => {
       var l = List[Instruction]()
 
       var newAss = ass
       for (el <- bdy) {
-        var x = apply(el, newAss)
+        var x = apply(el, newAss, null)
         newAss = x._2
         l = List(x._1) ::: l
       }
@@ -29,7 +30,7 @@ object Interpreter {
 
       var newAss = ass
       for (el <- bdy) {
-        var x = apply(el, newAss)
+        var x = apply(el, newAss, null)
         newAss = x._2
         l = List(x._1) ::: l
       }
@@ -45,17 +46,22 @@ object Interpreter {
       val meth = bindAll(ass, cM.mtd).evalClosed
 
       val v = Variable[b]
-      val mBody: Algo[_] = meth.body(v)
-      apply(mBody, Assignment(v, arg) :: ass)
+      val mBody: Algo[A] = meth.body(v)
+
+      apply(mBody, Assignment(v, arg) :: ass, (value:A) => {
+        println("Got result", value)
+      })
     }
     case cM: CallMethod[b, c] => {
       import cM.E
 
       val arg = bindAll(ass, cM.arg).evalClosed
       val v = Variable[b]
-      val mBody: Algo[_] = cM.mtd.body(v)
+      val mBody: Algo[A] = cM.mtd.body(v)
 
-      apply(mBody, Assignment(v, arg) :: ass)
+      apply(mBody, Assignment(v, arg) :: ass, (value:A) => {
+        println("Got result", value)
+      })
     }
     case Send(actorRef, msg) => {
       var blocking = false
@@ -74,7 +80,7 @@ object Interpreter {
           requestMessage = RequestMessageInter(sender.id, receiver.id, msg.mtd, arg)
           sender.sendMessage(requestMessage)
 
-          if (msg.isInstanceOf[BlockingMethod[_, _]]) {
+          if (msg.mtd.isInstanceOf[BlockingMethod[_, _]]) {
             blocking = true
           } else {
             blocking = false
@@ -107,7 +113,8 @@ object Interpreter {
         val al = fe.f(v)
 
         ls.foreach { e =>
-          var x = apply(al, Assignment(v, e) :: newAss)
+          //TODO: add callback
+          var x = apply(al, Assignment(v, e) :: newAss, null)
           // Remove added assignment for e
           newAss = x._2.tail
         }
@@ -115,8 +122,12 @@ object Interpreter {
       (command, newAss)
     case ScalaCode(cde) => {
       //TODO: Execute directly for now, may be in a do, try to add some ``dynamic`` steps into the compiled code
-      bindAll(ass, cde).evalClosed
-      (__do {},ass)
+      val result = bindAll(ass, cde).evalClosed
+      (__do {
+        if (callback != null) {
+          callback(result)
+        }
+      },ass)
     }
     case ScalaCodeWrapper(cde) => {
       (__do {
@@ -132,10 +143,10 @@ object Interpreter {
         //var oldAss = oldAssOption.get
         //oldAss.arg = valueInter
         var newAss = ass.map(x => (if (x.v == bound) Assignment(bound, valueInter) else x))
-        apply(body, newAss)
+        apply(body, newAss, callback)
       } else {
         //Assignment only for this "block"
-        var x = apply(body, Assignment(bound, valueInter) :: ass)
+        var x = apply(body, Assignment(bound, valueInter) :: ass, callback)
         (x._1, ass)
       }
     }
