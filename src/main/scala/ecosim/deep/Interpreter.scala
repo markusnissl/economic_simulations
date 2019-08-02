@@ -85,18 +85,19 @@ object Interpreter {
           } else {
             blocking = false
           }
+          blocking = true
         },
-        __if(blocking) {
+        __if(blocking) (
           __do {
-            sender.setMessageHandler(requestMessage.sessionId, (response: _root_.Simulation.Message) => {
+            sender.setMessageResponseHandler(requestMessage.sessionId, (response: _root_.Simulation.Message) => {
               responseMessage = response.asInstanceOf[ResponseMessageInter[Any, Any]]
             })
-          }
-          __dowhile(__wait(1))(responseMessage == null)
+          },
+          __dowhile(__wait(1))(responseMessage == null),
           __do {
             println("Got response!")
           }
-        }
+        )
       )
 
       (command, ass)
