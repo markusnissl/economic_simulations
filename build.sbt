@@ -21,3 +21,7 @@ resolvers += "Sonatype Releases" at "https://oss.sonatype.org/content/repositori
 
 resolvers += Resolver.sonatypeRepo("snapshots")
 libraryDependencies += "ch.epfl.data" %% "squid" % "0.4.0-SNAPSHOT"
+
+val paradiseVersion = "2.1.0"
+autoCompilerPlugins := true
+addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full)

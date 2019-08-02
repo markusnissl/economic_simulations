@@ -36,6 +36,17 @@ class Farmer(val market: Market) extends Actor {
 
 }
 
+/*@lift
+class TestLift {
+  def bar(x: Int):Int = x + 1
+
+  def test(): Unit = {
+  }
+
+  def reflect(d: squid.lang.Definitions): d.TopLevel.ClassWithObject[TestLift] = lift.thisClass(d)
+
+}*/
+
 object ManualEmbedding extends App {
 
   import ecosim.deep._
@@ -59,7 +70,13 @@ object ManualEmbedding extends App {
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
     Nil,
     //Forever(handleMessage, CallMethod[Int, Unit](marketSell, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
-    Forever(handleMessage, LetBinding(bindingTest, code"$bindingTest + 1", ScalaCodeWrapper(code"""println("Binding test:",$bindingTest)""")), CallMethod[Int, Boolean](marketSellB, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
+    Forever(
+      handleMessage,
+      LetBinding(bindingTest, code"$bindingTest + 1", ScalaCodeWrapper(code"""println("Binding test:",$bindingTest)""")),
+      LetBinding(bindingTest, code"$bindingTest + 1", ScalaCodeWrapper(code"""println("Binding test:",$bindingTest)""")),
+      CallMethod[Int, Boolean](marketSellB, code"10"),
+      CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")
+    ),
     Variable[Market])
 
   val farmerSelf = Variable[Farmer]
@@ -91,10 +108,10 @@ object ManualEmbedding extends App {
 
   actors.foreach(x => x match {
     case f: Farmer =>  {
-      f.algo_c = _root_.code.compile(Interpreter(farmer.main, Assignment(farmerSelf, f) :: Nil))
+      f.algo_c = _root_.code.compile(Interpreter(farmer.main, Assignment(farmerSelf, f) :: Nil)._1)
     }
     case m: Market => {
-      m.algo_c = _root_.code.compile(Interpreter(market.main, Assignment(bindingTest, 0) :: Assignment(marketSelf, m) :: Nil))
+      m.algo_c = _root_.code.compile(Interpreter(market.main, Assignment(bindingTest, 0) :: Assignment(marketSelf, m) :: Nil)._1)
     }
   })
 
@@ -106,4 +123,7 @@ object ManualEmbedding extends App {
   val f: Farmer => Int = code"($farmerSelf: Farmer) => $c".unsafe_asClosedCode.run
   println(code"($farmerSelf: Farmer) => $c")
   println(f(new Farmer(new Market)))
+
+
+  //println((new TestLift).reflect(null))
 }

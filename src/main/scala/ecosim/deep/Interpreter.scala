@@ -9,25 +9,35 @@ object Interpreter {
 
   import IR.Predef._
 
-  case class Assignment[V: CodeType](v: Variable[V], arg: V)(implicit val V: CodeType[V])
+  case class Assignment[V: CodeType](v: Variable[V], var arg: V)(implicit val V: CodeType[V])
 
-  def apply[A: CodeType](algo: Algo[A], ass: List[Assignment[_]]): Instruction = algo match {
+  def apply[A: CodeType](algo: Algo[A], ass: List[Assignment[_]]): (Instruction, List[Assignment[_]]) = algo match {
     case Forever(bdy@_*) => {
       var l = List[Instruction]()
+
+      var newAss = ass
       for (el <- bdy) {
-        l = List(apply(el, ass)) ::: l
+        var x = apply(el, newAss)
+        newAss = x._2
+        l = List(x._1) ::: l
       }
-      __forever(l: _*)
+
+      (__forever(l.reverse: _*),ass)
     }
     case Block(bdy@_*) => {
       var l = List[Instruction]()
+
+      var newAss = ass
       for (el <- bdy) {
-        l = List(apply(el, ass)) ::: l
+        var x = apply(el, newAss)
+        newAss = x._2
+        l = List(x._1) ::: l
       }
-      __doblock(l: _*)
+
+      (__doblock(l.reverse: _*),ass)
     }
     case Wait(cde) => {
-      __wait(bindAll(ass, cde).evalClosed)
+      (__wait(bindAll(ass, cde).evalClosed),ass)
     }
     case cM: CallMethodC[b, c] => {
       import cM.E
@@ -52,7 +62,8 @@ object Interpreter {
       var requestMessage: RequestMessageInter[_, _] = null
       var sender: SimO = null
       var responseMessage: ResponseMessageInter[_, _] = null
-      __doblock(
+
+      var command = __doblock(
         __do {
           val receiver: Actor = bindAll(ass, actorRef).evalClosed
           val tmpVar = ass.head.v.asInstanceOf[Variable[Actor]]
@@ -81,31 +92,52 @@ object Interpreter {
           }
         }
       )
+
+      (command, ass)
     }
     case fe: Foreach[b] =>
       import fe.E
       //TODO: this foreach implementation is not compatible to do the operation stepwise
-      __do {
+
+      var newAss = ass
+
+      var command = __do {
         val ls = bindAll(ass, fe.ls).evalClosed
         val v = Variable[b]
         val al = fe.f(v)
+
         ls.foreach { e =>
-          apply(al, Assignment(v, e) :: ass)
+          var x = apply(al, Assignment(v, e) :: newAss)
+          // Remove added assignment for e
+          newAss = x._2.tail
         }
       }
+      (command, newAss)
     case ScalaCode(cde) => {
       //TODO: Execute directly for now, may be in a do, try to add some ``dynamic`` steps into the compiled code
       bindAll(ass, cde).evalClosed
-      __do {}
+      (__do {},ass)
     }
     case ScalaCodeWrapper(cde) => {
-      __do {
+      (__do {
         bindAll(ass, cde).evalClosed
-      }
+      }, ass)
     }
     case LetBinding(bound, value, body) => {
       val valueInter = bindAll(ass, value).evalClosed
-      apply(body, Assignment(bound, valueInter) :: ass)
+
+      var oldAssOption = ass.find(x => x.v == bound)
+      if (oldAssOption.isDefined) {
+        //This does not work because of type, therefore replace assignment with new value
+        //var oldAss = oldAssOption.get
+        //oldAss.arg = valueInter
+        var newAss = ass.map(x => (if (x.v == bound) Assignment(bound, valueInter) else x))
+        apply(body, newAss)
+      } else {
+        //Assignment only for this "block"
+        var x = apply(body, Assignment(bound, valueInter) :: ass)
+        (x._1, ass)
+      }
     }
   }
 
