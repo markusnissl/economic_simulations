@@ -12,7 +12,7 @@ package Owner {
   import java.awt.TrayIcon.MessageType
 
   import Commodities.Commodity
-  import Simulation.{AgentId, Generator, MarketBuyOrderMessage, MarketBuySellerMessage, MarketResponse, Message, TransferMoneyMessage}
+  import Simulation.{AgentId, Generator, MarketBuyOrderMessage, MarketBuySellerMessage, MarketResponse, Message, RequestMessageInter, TransferMoneyMessage}
 
 
   case class BalanceSheet(
@@ -263,6 +263,11 @@ package Owner {
       this.receivedMessages = messages
       this.sendMessages = List()
       this
+    }
+
+    //For interpreter stufff
+    final def getRequestMessages: List[RequestMessageInter[Any,Unit]] = {
+      this.receivedMessages.filter(_.isInstanceOf[RequestMessageInter[Any, Unit]]).map(_.asInstanceOf[RequestMessageInter[Any,Unit]])
     }
 
     /**

@@ -46,12 +46,18 @@ object ManualEmbedding extends App {
   //println(codeTypeOf[List[Double]])
 
   val marketSell = NonBlockingMethod[Int](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("sell:"); println("Market sells: " + $arg)"""))
+  val marketSellB = BlockingMethod[Int, Boolean](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("sell:"); println("Market sells: " + $arg); true"""))
   val marketSell2 = NonBlockingMethod[(Int,List[Int])](IR.methodSymbol[Market]("sell2"), (arg: Variable[(Int,List[Int])]) => ScalaCode(code"""println("sell2:", $arg._1); $arg._2.foreach(println)"""))
+
+  val marketSelf = Variable[Market]
+
+  val handleMessage = Foreach(code"$marketSelf.getRequestMessages", (p: Variable[_root_.Simulation.RequestMessageInter[Any,Unit]]) => CallMethodC(code"$p.mtd", code"$p.arg"))
 
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
     Nil,
-    Forever(CallMethod(marketSell, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
+    //Forever(handleMessage, CallMethod[Int, Unit](marketSell, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
+    Forever(handleMessage, CallMethod[Int, Boolean](marketSellB, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
     Variable[Market])
 
   val farmerSelf = Variable[Farmer]
@@ -68,23 +74,13 @@ object ManualEmbedding extends App {
           Send[Unit](code"$p", Message[(Actor, Int), Unit](notifySym, code"($farmerSelf, $farmerSelf.happiness)"))
         )
     ) :: Nil,
-    Forever(ScalaCode(code"println(5)"), Send(code"$farmerSelf.market", Message[Int, Unit](marketSell, code"10")), Wait(code"1")),
+    Forever(ScalaCode(code"println(5)"), Send(code"$farmerSelf.market", Message[Int, Unit](marketSell, code"500")), Wait(code"1")),
     //Forever(ScalaCode(code"println(5)"), Send(code"$farmerSelf.market", Message[(Int,List[Int]), Unit](marketSell2, code"(10,List(1,2,3))")), Wait(code"1")),
     farmerSelf)
 
   val simulation = Simulation(market :: farmer :: Nil, code"val m = new Market; List(m, new Farmer(m))")
 
   println(simulation)
-
-  // Test after discussion
-  def interpret[A](algo: Algo[A]): Unit = algo match {
-    case ScalaCode(cde) => {
-      println(cde)
-    }
-    case _ => {
-      println("No match")
-    }
-  }
 
   val actors = simulation.init.unsafe_asClosedCode.run
   val simu = new _root_.Simulation.Simulation()
@@ -95,7 +91,7 @@ object ManualEmbedding extends App {
       f.algo_c = _root_.code.compile(Interpreter(farmer.main, Assignment(farmerSelf, f) :: Nil))
     }
     case m: Market => {
-      m.algo_c = _root_.code.compile(Interpreter(market.main, Nil))
+      m.algo_c = _root_.code.compile(Interpreter(market.main, Assignment(marketSelf, m) :: Nil))
     }
   })
 

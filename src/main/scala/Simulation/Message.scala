@@ -5,7 +5,8 @@ import java.util.UUID
 import Commodities.Commodity
 import Owner.{ITEM_T, Owner, SalesRecord}
 import Timeseries.Timeseries
-import ecosim.deep.IR
+import ecosim.deep
+import ecosim.deep.{IR, NonLocalMethod}
 
 
 abstract class Message extends Serializable {
@@ -54,7 +55,15 @@ case class RequestMarketData(override val senderId: AgentId, override val receiv
 case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: Timeseries[List[SalesRecord]]) extends Message
 
 // General message
-case class RequestMessage2(override val senderId: AgentId, override val receiverId: AgentId, methodName:IR.MtdSymbol, args:Any) extends Message
+case class RequestMessageInter[A,B](override val senderId: AgentId, override val receiverId: AgentId, mtd: NonLocalMethod[A,B], arg: Any) extends Message {
+  //TODO: fix me reply
+  def reply(owner: Owner, returnValue:Any): Unit = {
+    val msg = ResponseMessageInter(receiverId, senderId, returnValue)
+    msg.sessionId = this.sessionId
+    owner.sendMessage(msg)
+  }
+}
+case class ResponseMessageInter[A,B](override val senderId: AgentId, override val receiverId: AgentId, arg: Any) extends Message
 
 case class RequestMessage(override val senderId: AgentId, override val receiverId: AgentId, call_f: Any => Any) extends Message {
 

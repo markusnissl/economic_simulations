@@ -58,6 +58,7 @@ package code {
 
 
   case class __forever(block: Instruction*) extends SugarInstruction
+  case class __doblock(block: Instruction*) extends SugarInstruction
 
   /** WARNING: compiling [[__repeat]] creates state that cannot be copied when
     * copying a simulation.
@@ -160,6 +161,9 @@ package object code {
       case __if(cond, block) => {
         val v = compilev(block.toVector);
         Vector(__goto((!cond()), v.length + 1)) ++ shift(v, 1)
+      }
+      case __doblock(block@_*) => {
+        compilev(block.toVector)
       }
       case __dowhile(block, cond) => {
         compilev(block.toVector) ++ Vector(__goto(cond(), 0))
