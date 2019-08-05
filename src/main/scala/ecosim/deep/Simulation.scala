@@ -14,7 +14,6 @@ case class CallMethodC[E, R: CodeType](mtd: OpenCode[Method[E,R]], arg: OpenCode
 case class Send[E,R:CodeType](actorRef: OpenCode[runtime.Actor], msg: Message[E,R])(implicit val E: CodeType[E]) extends Algo[R]
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], f: Variable[E] => Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
-case class ScalaCodeWrapper[A: CodeType](cde: OpenCode[A]) extends Algo[A]
 case class LetBinding[V: CodeType, A: CodeType](bound: Variable[V], value: OpenCode[V], body: Algo[A]) extends Algo[A]
 case class LetBinding2[V: CodeType, A: CodeType](bound: Variable[V], value: Algo[V], body: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
 

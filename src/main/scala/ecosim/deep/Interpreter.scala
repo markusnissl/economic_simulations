@@ -1,9 +1,11 @@
 package ecosim.deep
 
 import _root_.Simulation.{RequestMessageInter, ResponseMessageInter, SimO}
-import code.{Instruction, __do, __doblock, __forever, __if, __wait, __dowhile}
+import code.{Instruction, __do, __doblock, __dowhile, __forever, __if, __wait}
 import ecosim.runtime.Actor
 import ecosim.example.ex1.Market
+
+import scala.collection.mutable
 
 object Interpreter {
 
@@ -11,59 +13,76 @@ object Interpreter {
 
   class Assignment[V: CodeType](val v: Variable[V], arg: => V)(implicit val V: CodeType[V]) {
     def getArg: V = arg
+
+    override def toString: String = "Assignment(" + v + "," + arg + ")"
   }
 
   // TODO: redefine callback handling for not passing callback forward where not needed
-  def apply[A: CodeType](algo: Algo[A], ass: List[Assignment[_]], callback: (A => Unit) = null): (Instruction, List[Assignment[_]]) = algo match {
+  def apply[A: CodeType](algo: Algo[A], ass: mutable.ListBuffer[Assignment[_]], callback: (A => Unit) = null): Instruction = algo match {
     case Forever(bdy@_*) => {
       var l = List[Instruction]()
 
-      var newAss = ass
       for (el <- bdy) {
-        var x = apply(el, newAss, null)
-        newAss = x._2
-        l = List(x._1) ::: l
+        l = apply(el, ass, null) :: l
       }
 
-      (__forever(l.reverse: _*),ass)
+      __forever(l.reverse: _*)
     }
     case Block(bdy@_*) => {
       var l = List[Instruction]()
 
-      var newAss = ass
       for (el <- bdy) {
-        var x = apply(el, newAss, null)
-        newAss = x._2
-        l = List(x._1) ::: l
+        l = apply(el, ass, null) :: l
       }
 
-      (__doblock(l.reverse: _*),ass)
+      __doblock(l.reverse: _*)
     }
     case Wait(cde) => {
-      (__wait(bindAll(ass, cde).evalClosed),ass)
+      __wait(bindAll(ass.toList, cde).evalClosed)
     }
     case cM: CallMethodC[b, c] => {
       import cM.E
-      val arg = bindAll(ass, cM.arg).evalClosed
-      val meth = bindAll(ass, cM.mtd).evalClosed
 
       val v = Variable[b]
-      val mBody: Algo[A] = meth.body(v)
+      var mBody: Algo[A] = null
 
-      apply(mBody, (new Assignment(v, arg)) :: ass, (value:A) => {
-        println("Got result CMC", value)
-      })
+      __doblock(
+        __do {
+          val meth = bindAll(ass.toList, cM.mtd).evalClosed
+          mBody = meth.body(v)
+
+          val arg = bindAll(ass.toList, cM.arg).evalClosed
+          ass.prepend(new Assignment(v, arg))
+        },
+        __do(
+          //FIXME: Method should be compiled at runtime
+          apply(mBody, ass, (value: A) => {
+            println("Got result CMC", value)
+          })
+        ),
+        __do {
+          ass.remove(0)
+        }
+      )
     }
     case cM: CallMethod[b, c] => {
       import cM.E
 
-      val arg = bindAll(ass, cM.arg).evalClosed
       val v = Variable[b]
       val mBody: Algo[A] = cM.mtd.body(v)
 
-      apply(mBody, (new Assignment(v, arg)) :: ass, (value:A) => {
-        println("Got result", value)
-      })
+      __doblock(
+        __do {
+          val arg = bindAll(ass.toList, cM.arg).evalClosed
+          ass.prepend(new Assignment(v, arg))
+        },
+        apply(mBody, ass, (value: A) => {
+          println("Got result", value)
+        }),
+        __do {
+          ass.remove(0)
+        }
+      )
     }
     case send: Send[b, c] => {
       import send.E
@@ -73,13 +92,14 @@ object Interpreter {
       var sender: SimO = null
       var responseMessage: ResponseMessageInter[A, _] = null
 
+
       var command = __doblock(
         __do {
-          val receiver: Actor = bindAll(ass, send.actorRef).evalClosed
+          val receiver: Actor = bindAll(ass.toList, send.actorRef).evalClosed
           val tmpVar = ass.head.v.asInstanceOf[Variable[Actor]]
-          sender = bindAll(ass, code"$tmpVar").evalClosed
+          sender = bindAll(ass.toList, code"$tmpVar").evalClosed
 
-          val arg = bindAll(ass, send.msg.arg).evalClosed
+          val arg = bindAll(ass.toList, send.msg.arg).evalClosed
 
           requestMessage = RequestMessageInter(sender.id, receiver.id, send.msg.mtd, arg)
           sender.sendMessage(requestMessage)
@@ -91,10 +111,10 @@ object Interpreter {
           }
           blocking = true
         },
-        __if(blocking) (
+        __if(blocking)(
           __do {
             sender.setMessageResponseHandler(requestMessage.sessionId, (response: _root_.Simulation.Message) => {
-              responseMessage = response.asInstanceOf[ResponseMessageInter[A,_]]
+              responseMessage = response.asInstanceOf[ResponseMessageInter[A, _]]
             })
           },
           __dowhile(__wait(1))(responseMessage == null),
@@ -108,84 +128,115 @@ object Interpreter {
         )
       )
 
-      (command, ass)
+      command
     }
     case fe: Foreach[b, A] =>
       import fe.E
-      //TODO: this foreach implementation is not compatible to do the operation stepwise
 
-      var newAss = ass
+      var iter:Iterator[b] = null
+      val v = Variable[b]
+      val al: Algo[A] = fe.f(v)
 
-      var command = __do {
-        val ls = bindAll(ass, fe.ls).evalClosed
-        val v = Variable[b]
-        val al:Algo[A] = fe.f(v)
 
-        ls.foreach { e =>
-          var x = apply(al, (new Assignment(v, e)) :: newAss, null)
-          // Remove added assignment for e
-          newAss = x._2.tail
+      var command = __doblock(
+        __do {
+          val ls = bindAll(ass.toList, fe.ls).evalClosed
+          iter = ls.iterator
+
+        },
+        __dowhile(
+          __if(iter.hasNext)(
+            __do {
+              val e = iter.next()
+              ass.prepend(new Assignment(v, e))
+            },
+            apply(al, ass, null),
+            __do {
+              ass.remove(0)
+            }
+          )
+        )(iter.hasNext),
+        __do {
+          if (callback != null) {
+            callback(())
+          }
         }
-
-        if (callback != null) {
-          callback(())
-        }
-      }
-      (command, newAss)
+      )
+      command
     case ScalaCode(cde) => {
-      //TODO: Execute directly for now, may be in a do, try to add some ``dynamic`` steps into the compiled code
-      val result = bindAll(ass, cde).evalClosed
-      (__do {
+      __do {
+        val result = bindAll(ass.toList, cde).evalClosed
         if (callback != null) {
           callback(result)
         }
-      },ass)
-    }
-    case ScalaCodeWrapper(cde) => {
-      (__do {
-        bindAll(ass, cde).evalClosed
-      }, ass)
+      }
     }
     case LetBinding(bound, value, body) => {
-      val valueInter = bindAll(ass, value).evalClosed
-
-      var oldAssOption = ass.find(x => x.v == bound)
-      if (oldAssOption.isDefined) {
-        //This does not work because of type, therefore replace assignment with new value
-        //var oldAss = oldAssOption.get
-        //oldAss.arg = valueInter
-        var newAss = ass.map(x => (if (x.v == bound) (new Assignment(bound, valueInter)) else x))
-        apply(body, newAss, callback)
-      } else {
-        //Assignment only for this "block"
-        var x = apply(body, (new Assignment(bound, valueInter)) :: ass, callback)
-        (x._1, ass)
-      }
-    }
-    case lb2: LetBinding2[A,c] => {
-
       var valueInter: Any = null
 
-      val algo1 = apply(lb2.value, ass, (result:A) => {
-        valueInter = result
-      })
+      val oldAssOption = ass.find(x => x.v == bound)
 
-      var algo2:(Instruction, List[Assignment[_]]) = null
-
-      var oldAssOption = ass.find(x => x.v == lb2.bound)
-      if (oldAssOption.isDefined) {
-        //This does not work because of type, therefore replace assignment with new value
-        //var oldAss = oldAssOption.get
-        //oldAss.arg = valueInter
-        var newAss = ass.map(x => (if (x.v == lb2.bound) (new Assignment(lb2.bound, valueInter.asInstanceOf[A])) else x))
-        algo2 = apply(lb2.body, newAss, callback)
-      } else {
-        //Assignment only for this "block"
-        val x = apply(lb2.body, (new Assignment(lb2.bound, valueInter.asInstanceOf[A])) :: ass, callback)
-        algo2 = (x._1, ass)
+      val algo1 = __do {
+        valueInter = bindAll(ass.toList, value).evalClosed
+        if (oldAssOption.isDefined) {
+          val index = ass.indexWhere(_.v == bound)
+          ass.update(index, new Assignment(bound, valueInter))
+        } else {
+          ass.prepend(new Assignment(bound, valueInter))
+        }
       }
 
-      (__doblock (algo1._1, algo2._1), algo2._2)
+      var algo2: Instruction = null
+
+      if (oldAssOption.isDefined) {
+        algo2 = apply(body, ass, callback)
+      } else {
+        algo2 = __doblock(
+          apply(body, ass, callback),
+          __do {
+            // Remove added element again
+            ass.remove(0)
+          }
+        )
+      }
+
+      __doblock(algo1, algo2)
+    }
+
+    case lb2: LetBinding2[A, c] => {
+
+      var valueInter: Any = null
+      var oldAssOption = ass.find(x => x.v == lb2.bound)
+
+      val algo1 = __doblock(
+        apply(lb2.value, ass, (result: A) => {
+          valueInter = result
+        }),
+        __do {
+          if (oldAssOption.isDefined) {
+            val index = ass.indexWhere(_.v == lb2.bound)
+            ass.update(index, new Assignment(lb2.bound, valueInter.asInstanceOf[A]))
+          } else {
+            ass.prepend(new Assignment(lb2.bound, valueInter.asInstanceOf[A]))
+          }
+        }
+      )
+
+      var algo2: Instruction = null
+
+      if (oldAssOption.isDefined) {
+        algo2 = apply(lb2.body, ass, callback)
+      } else {
+        algo2 = __doblock(
+          apply(lb2.body, ass, callback),
+          __do {
+            // Remove added element again
+            ass.remove(0)
+          }
+        )
+      }
+
+      __doblock(algo1, algo2)
     }
   }
 
@@ -194,9 +245,12 @@ object Interpreter {
     def bindAllInner(ass: List[Assignment[_]]): Bound[A] = ass match {
       case Nil => BoundNil(cde)
       case (as: Assignment[v]) :: ass =>
+
         import as._
+
         BoundCons(as.v, as.getArg, bindAllInner(ass))
     }
+
     bindAllInner(ass.reverse)
   }
 
@@ -237,9 +291,9 @@ object InterpreterTest extends App {
 
   val lsc = code"List(1,2,3)"
 
-  println(Interpreter(ScalaCode(lsc), Nil))
+  //println(Interpreter(ScalaCode(lsc), Nil))
 
-  println(Interpreter(Foreach(lsc, (x: Variable[Int]) => ScalaCode(code"println($x + 1)")), Nil))
+  //println(Interpreter(Foreach(lsc, (x: Variable[Int]) => ScalaCode(code"println($x + 1)")), Nil))
 
 
 }

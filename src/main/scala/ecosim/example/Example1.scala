@@ -4,6 +4,8 @@ import ecosim.deep.Interpreter.Assignment
 import ecosim.runtime._
 import ecosim.sim
 
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+
 @sim
 class Market extends Actor {
   var goods: List[String] = Nil
@@ -69,11 +71,9 @@ object ManualEmbedding extends App {
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
     Nil,
-    //Forever(handleMessage, CallMethod[Int, Unit](marketSell, code"10"),CallMethod(marketSell2, code"(10, List(1,2,3))"),Wait(code"1")),
     Forever(
       handleMessage,
-      LetBinding(bindingTest, code"$bindingTest + 1", ScalaCodeWrapper(code"""println("Binding test:",$bindingTest)""")),
-      LetBinding(bindingTest, code"$bindingTest + 1", ScalaCodeWrapper(code"""println("Binding test:",$bindingTest)""")),
+      LetBinding(bindingTest, code"$bindingTest + 1", ScalaCode(code"""println("Binding test:",$bindingTest)""")),
       CallMethod[Int, Boolean](marketSellB, code"10"),
       CallMethod(marketSell2, code"(10, List(1,2,3))"),
       Wait(code"1")
@@ -97,7 +97,7 @@ object ManualEmbedding extends App {
         )
     ) :: Nil,
     Forever(
-      LetBinding2[Boolean,Unit](testResult,Send[Int, Boolean](code"$farmerSelf.market", Message(marketSellB, code"500")), ScalaCodeWrapper(code"""println("TEST_VAR",$testResult)""")),
+      LetBinding2[Boolean,Unit](testResult,Send[Int, Boolean](code"$farmerSelf.market", Message(marketSellB, code"500")), ScalaCode(code"""println("TEST_VAR",$testResult)""")),
       Wait(code"1")
     ),
     //Forever(Send(code"$farmerSelf.market", Message[(Int,List[Int]), Unit](marketSell2, code"(10,List(1,2,3))")), Wait(code"1")),
@@ -113,10 +113,10 @@ object ManualEmbedding extends App {
 
   actors.foreach(x => x match {
     case f: Farmer =>  {
-      f.algo_c = _root_.code.compile(Interpreter(farmer.main, (new Assignment(farmerSelf, f)) :: Nil)._1)
+      f.algo_c = _root_.code.compile(Interpreter(farmer.main, ListBuffer(new Assignment(farmerSelf, f))))
     }
     case m: Market => {
-      m.algo_c = _root_.code.compile(Interpreter(market.main, (new Assignment(bindingTest, 0)) :: (new Assignment(marketSelf, m)) :: Nil)._1)
+      m.algo_c = _root_.code.compile(Interpreter(market.main, ListBuffer(new Assignment(bindingTest, 0), new Assignment(marketSelf, m))))
     }
   })
 
