@@ -1,7 +1,7 @@
 package ecosim.deep
 
 import _root_.Simulation.{RequestMessageInter, ResponseMessageInter, SimO}
-import code.{Instruction, __do, __doblock, __dowhile, __forever, __if, __wait}
+import code.{Instruction, __do, __doRuntime, __doblock, __dowhile, __forever, __if, __wait}
 import ecosim.runtime.Actor
 import ecosim.example.ex1.Market
 
@@ -54,9 +54,8 @@ object Interpreter {
           val arg = bindAll(ass.toList, cM.arg).evalClosed
           ass.prepend(new Assignment(v, arg))
         },
-        __do(
-          //FIXME: Method should be compiled at runtime
-          apply(mBody, ass, (value: A) => {
+        __doRuntime(
+          () => apply(mBody, ass, (value: A) => {
             println("Got result CMC", value)
           })
         ),

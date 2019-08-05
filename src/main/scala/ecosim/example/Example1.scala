@@ -105,8 +105,6 @@ object ManualEmbedding extends App {
 
   val simulation = Simulation(market :: farmer :: Nil, code"val m = new Market; List(m, new Farmer(m))")
 
-  println(simulation)
-
   val actors = simulation.init.unsafe_asClosedCode.run
   val simu = new _root_.Simulation.Simulation()
   simu.init(actors)

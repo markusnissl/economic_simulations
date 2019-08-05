@@ -51,11 +51,28 @@ package code {
   }
 
 
+
   /** An instruction that needs to be compiled down to SimpleInstructions
     * for the program to be executable.
     */
   abstract class SugarInstruction extends Instruction
 
+  // Todo/Fixme: Add support for wait in runtime execution
+  case class __doRuntime(block: () => Instruction) extends SimpleInstruction {
+    def exec(pos: Int): Int = {
+      val innerProgram:Vector[SimpleInstruction] = compile(block())
+      var innerPos = 0
+
+      while (innerPos < innerProgram.length) {
+        if (innerProgram(innerPos).isInstanceOf[__wait[_]]) {
+          throw new Exception("Wait operation is currently not supported")
+        }
+        innerPos = innerProgram(innerPos).exec(innerPos);
+      }
+
+      pos + 1
+    }
+  }
 
   case class __forever(block: Instruction*) extends SugarInstruction
   case class __doblock(block: Instruction*) extends SugarInstruction
