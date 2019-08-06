@@ -2,6 +2,10 @@ package ecosim
 package deep
 
 import IR.Predef._
+import code.{SimpleInstruction, __return}
+import ecosim.deep.Interpreter.Assignment
+
+import scala.collection.mutable.ListBuffer
 
 case class Message[A,R](mtd: NonLocalMethod[A,R], arg: OpenCode[A])
 
@@ -36,8 +40,64 @@ case class State[A](sym: IR.MtdSymbol, init: OpenCode[A])(implicit val tpe: Code
   override def toString = s"var ${sym.asMethodSymbol.owner.name}.${sym.asMethodSymbol.name}"
 }
 
-case class ActorType[A <: runtime.Actor](name: String, state: List[State[_]], methods: List[Method[_,_]], main: Algo[Unit], self: Variable[A])
+case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], methods: List[Method[_,_]], main: Algo[Unit], self: Variable[X])(implicit val X:CodeType[X]){
+
+
+  private def compileMethod[A](method: Method[A,_], args:ListBuffer[Assignment[_]]): (Variable[_], Vector[SimpleInstruction]) = {
+    import method.A
+    val methodArgs = Variable[A];
+    val methodAlgo = method.body(methodArgs)
+    (methodArgs, _root_.code.compile(Interpreter(methodAlgo, args, null)))
+  }
+
+  def compile(selfRef: runtime.Actor): (Int, Vector[SimpleInstruction]) = {
+    var pos = 0
+    var code: Vector[SimpleInstruction] = Vector()
+    val args = ListBuffer[Assignment[_]](new Assignment(self, selfRef.asInstanceOf[X]))
+
+    var methodPositions:Map[IR.MtdSymbol, (Int, Variable[_])] = Map()
+
+    for (mtd <- this.methods) {
+      val compiledCode = compileMethod(mtd, args)
+      methodPositions = methodPositions + (mtd.sym -> (pos, compiledCode._1))
+
+      val method = _root_.code.shift(compiledCode._2 ++ Vector[SimpleInstruction](__return()), pos)
+      pos += method.length
+      code = code ++ method
+    }
+
+    val main = _root_.code.shift(_root_.code.compile(Interpreter(this.main, args, methodPositions)), pos)
+    code = code ++ main
+
+    (pos, code )
+  }
+
+}
 
 case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]]) {
-  
+
+  def compile(): List[runtime.Actor] = {
+    val actors = this.init.unsafe_asClosedCode.run
+    actors.foreach(a => {
+      val actorTypeSearch = actorTypes.find(_.name == a.getClass.getSimpleName)
+      if (actorTypeSearch.isEmpty) {
+        throw new Exception("Actor Type not defined")
+      }
+
+      val actorType = actorTypeSearch.get
+
+      val info = actorType.compile(a)
+
+      //TODO: handle states
+      /*actorType.state.foreach(s => {
+        println(s.sym, s.init)
+      })*/
+
+      a.main_pos = info._1
+      a.algo_c = info._2
+    })
+
+    actors
+  }
+
 }

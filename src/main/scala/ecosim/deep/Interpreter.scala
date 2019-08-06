@@ -161,9 +161,10 @@ object Interpreter {
     case LetBinding(bound, value, body) => {
       var valueInter: Any = null
 
-      val oldAssOption = ass.find(x => x.v == bound)
+      var oldAssOption:Option[Assignment[_]] = None
 
       val algo1 = __do {
+        oldAssOption = ass.find(x => x.v == bound)
         valueInter = bindAll(ass.toList, value).evalClosed
         if (oldAssOption.isDefined) {
           val index = ass.indexWhere(_.v == bound)
@@ -173,19 +174,18 @@ object Interpreter {
         }
       }
 
-      var algo2: Instruction = null
-
-      if (oldAssOption.isDefined) {
-        algo2 = apply(body, ass, methodMapping)
-      } else {
-        algo2 = __doblock(
+      var algo2: Instruction = __doblock(
+        __if(oldAssOption.isDefined)(
+          apply(body, ass, methodMapping)
+        ),
+        __if(!oldAssOption.isDefined)(
           apply(body, ass, methodMapping),
           __do {
             // Remove added element again
             ass.remove(0)
           }
         )
-      }
+      )
 
       __doblock(algo1, algo2)
     }
@@ -193,9 +193,12 @@ object Interpreter {
     case lb2: LetBinding2[A, c] => {
 
       var valueInter: Any = null
-      var oldAssOption = ass.find(x => x.v == lb2.bound)
+      var oldAssOption:Option[Assignment[_]] = None
 
       val algo1 = __doblock(
+        __do{
+          oldAssOption = ass.find(x => x.v == lb2.bound)
+        },
         apply(lb2.value, ass, methodMapping),
         __doResult { result: Any =>
           valueInter = result
@@ -209,19 +212,18 @@ object Interpreter {
         }
       )
 
-      var algo2: Instruction = null
-
-      if (oldAssOption.isDefined) {
-        algo2 = apply(lb2.body, ass,methodMapping)
-      } else {
-        algo2 = __doblock(
+      var algo2: Instruction = __doblock(
+        __if(oldAssOption.isDefined)(
+          apply(lb2.body, ass,methodMapping)
+        ),
+        __if(!oldAssOption.isDefined)(
           apply(lb2.body, ass,methodMapping),
           __do {
             // Remove added element again
             ass.remove(0)
           }
         )
-      }
+      )
 
       __doblock(algo1, algo2)
     }
