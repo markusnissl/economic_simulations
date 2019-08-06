@@ -1,12 +1,14 @@
 import org.scalatest._
 import code._
 
+import scala.collection.mutable.ListBuffer
+
 case class ExecSim(prog: Vector[SimpleInstruction]) {
   var pos  = 0
   var time = 0
 
   def exec(until: Int) : Option[Int] = {
-    val (p, t, n) = code.exec(prog, pos, time, until);
+    val (p, t, n) = code.exec(prog, pos, time, until, ListBuffer());
     pos = p;
     time = t;
     n
@@ -18,7 +20,7 @@ case class ExecSimDouble(prog: Vector[SimpleInstruction]) {
   var time = 0.0
 
   def exec(until: Double) : Option[Double] = {
-    val (p, t, n) = code.exec[Double](prog, pos, time, until);
+    val (p, t, n) = code.exec[Double](prog, pos, time, until, ListBuffer());
     pos = p;
     time = t;
     n
@@ -34,8 +36,8 @@ class CodeSpec extends FlatSpec {
   def wprog[T](w: T) = compile(__forever(__wait(w)));
 
   "exec" should "stop after the last instruction that can still be finished no later then the end time" in {
-    assert(exec(wprog(11), 0, 0, 10) == (0, 0, Some(11)));
-    assert(exec(wprog( 5), 0, 0, 11) == (0, 10, Some(15)));
+    assert(exec(wprog(11), 0, 0, 10, ListBuffer()) == (0, 0, Some(11)));
+    assert(exec(wprog( 5), 0, 0, 11, ListBuffer()) == (0, 10, Some(15)));
   }
 
   "execp" should "stop after the last instruction that can still be finished no later then the end time" in {
@@ -86,18 +88,18 @@ class CodeSpec extends FlatSpec {
   }
 
  "Terminating programs" should "work" in {
-   assert(exec(Vector(__wait(1)), 0, 0, 10) == (1, 1, None))
-   assert(exec(Vector(__wait(1), __wait(7)), 0, 0, 5) == (1, 1, Some(8)))
+   assert(exec(Vector(__wait(1)), 0, 0, 10, ListBuffer()) == (1, 1, None))
+   assert(exec(Vector(__wait(1), __wait(7)), 0, 0, 5, ListBuffer()) == (1, 1, Some(8)))
  }
 
  "Nonterminating programs" should "be halted in time" in {
-   assert(exec(compile(__forever(__wait(1))), 0, 0, 5) == (0, 5, Some(6)))
-   assert(exec(compile(__forever(__wait(2))), 0, 0, 5) == (0, 4, Some(6)))
+   assert(exec(compile(__forever(__wait(1))), 0, 0, 5, ListBuffer()) == (0, 5, Some(6)))
+   assert(exec(compile(__forever(__wait(2))), 0, 0, 5, ListBuffer()) == (0, 4, Some(6)))
  }
 
  "Side effects" should "work" in {
    var a = 0;
-   assert(exec(Vector(__do{a += 1}), 0, 0, 0) == (1, 0, None))
+   assert(exec(Vector(__do{a += 1}), 0, 0, 0, ListBuffer()) == (1, 0, None))
    assert(a == 1);
  }
 
@@ -120,9 +122,9 @@ class CodeSpec extends FlatSpec {
       )
     }
 
-    assert(exec(prog, 0, 0.0, 5.0) == (3, 4.6, Some(6.8999999999999995)));
+    assert(exec(prog, 0, 0.0, 5.0, ListBuffer()) == (3, 4.6, Some(6.8999999999999995)));
     assert(s == "H;0;1;2;H;0;1;2;H;0;1;2;");
-    assert(exec(prog, 3, 4.6, 7.0) == (3, 6.8999999999999995, Some(9.2)));
+    assert(exec(prog, 3, 4.6, 7.0, ListBuffer()) == (3, 6.8999999999999995, Some(9.2)));
     assert(s == "H;0;1;2;H;0;1;2;H;0;1;2;H;0;1;2;");
   }
 
@@ -138,8 +140,8 @@ class CodeSpec extends FlatSpec {
       )
     }
 
-    assert(exec(prog2, 0, 0, 10) == (2,10, Some(11)));
-    assert(exec(prog2, 2, 10, 20) == (5,15, None));
+    assert(exec(prog2, 0, 0, 10, ListBuffer()) == (2,10, Some(11)));
+    assert(exec(prog2, 2, 10, 20, ListBuffer()) == (5,15, None));
 
     assert(a == 15);
   }
@@ -164,7 +166,7 @@ val prog3 = compile(
     )
   )(true)
 )
-    assert(exec(prog3, 0, 0, 20) == (3, 20, Some(21)));
+    assert(exec(prog3, 0, 0, 20, ListBuffer()) == (3, 20, Some(21)));
     assert(s == "adbkbkedbkbkedbkbkecfffadbkbkedbkbkedbkbkecfffadbkbkedb");
   }
 

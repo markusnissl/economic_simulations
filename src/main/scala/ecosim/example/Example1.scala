@@ -1,9 +1,11 @@
 package ecosim.example.ex1
 
+import code.{SimpleInstruction, __goto, __return}
 import ecosim.deep.Interpreter.Assignment
 import ecosim.runtime._
 import ecosim.sim
 
+import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 @sim
@@ -38,17 +40,6 @@ class Farmer(val market: Market) extends Actor {
 
 }
 
-/*@lift
-class TestLift {
-  def bar(x: Int):Int = x + 1
-
-  def test(): Unit = {
-  }
-
-  def reflect(d: squid.lang.Definitions): d.TopLevel.ClassWithObject[TestLift] = lift.thisClass(d)
-
-}*/
-
 object ManualEmbedding extends App {
 
   import ecosim.deep._
@@ -60,22 +51,31 @@ object ManualEmbedding extends App {
 
   val marketSell = NonBlockingMethod[Int](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("Market sells: " + $arg)"""))
   val marketSellB = BlockingMethod[Int, Boolean](IR.methodSymbol[Market]("sell"), (arg: Variable[Int]) => ScalaCode(code"""println("Market sells: " + $arg); true"""))
-  val marketSell2 = NonBlockingMethod[(Int,List[Int])](IR.methodSymbol[Market]("sell2"), (arg: Variable[(Int,List[Int])]) => ScalaCode(code"""println("sell2:", $arg._1); $arg._2.foreach(println)"""))
+  val marketSell2 = NonBlockingMethod[(Int,List[Int])](IR.methodSymbol[Market]("sell2"), (arg: Variable[(Int,List[Int])]) => ScalaCode(code"""println("sell2:", $arg._1); $arg._2.foreach(println);"""))
 
   val marketSelf = Variable[Market]
 
-  val handleMessage = Foreach(code"$marketSelf.getRequestMessages", (p: Variable[_root_.Simulation.RequestMessageInter[Any,Unit]]) => CallMethodC(code"$p.mtd", code"$p.arg"))
+  val resultMessageCall = Variable[Any]
+
+  val handleMessage = Foreach(
+    code"$marketSelf.getRequestMessages",
+    (p: Variable[_root_.Simulation.RequestMessageInter[Any,Unit]]) => LetBinding2(
+      resultMessageCall,
+      CallMethodC[Any, Any](code"$p.sym", code"$p.arg"),
+      ScalaCode(code"""$p.reply($marketSelf, $resultMessageCall)""")
+    )
+  )
 
   val bindingTest = Variable[Int]
 
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
-    Nil,
+    marketSell :: marketSellB :: marketSell2 :: Nil,
     Forever(
       handleMessage,
       LetBinding(bindingTest, code"$bindingTest + 1", ScalaCode(code"""println("Binding test:",$bindingTest)""")),
-      CallMethod[Int, Boolean](marketSellB, code"10"),
-      CallMethod(marketSell2, code"(10, List(1,2,3))"),
+      CallMethod[Int, Boolean](marketSellB.sym, code"10"),
+      CallMethod[(Int, List[Int]), Unit](marketSell2.sym, code"(10, List(1,2,3))"),
       Wait(code"1")
     ),
     Variable[Market])
@@ -107,17 +107,45 @@ object ManualEmbedding extends App {
 
   val actors = simulation.init.unsafe_asClosedCode.run
   val simu = new _root_.Simulation.Simulation()
-  simu.init(actors)
+
+  def compileMethod[A](method: Method[A,_], args:ListBuffer[Assignment[_]]): (Variable[_], Vector[SimpleInstruction]) = {
+    import method.A
+    val methodArgs = Variable[A];
+    val methodAlgo = method.body(methodArgs)
+    (methodArgs, _root_.code.compile(Interpreter(methodAlgo, args, null)))
+  }
+
 
   actors.foreach(x => x match {
     case f: Farmer =>  {
-      f.algo_c = _root_.code.compile(Interpreter(farmer.main, ListBuffer(new Assignment(farmerSelf, f))))
+      f.algo_c = _root_.code.compile(Interpreter(farmer.main, ListBuffer(new Assignment(farmerSelf, f)), null))
     }
     case m: Market => {
-      m.algo_c = _root_.code.compile(Interpreter(market.main, ListBuffer(new Assignment(bindingTest, 0), new Assignment(marketSelf, m))))
+      val args:ListBuffer[Assignment[_]] = ListBuffer(new Assignment(bindingTest, 0), new Assignment(marketSelf, m))
+
+      var pos = 0
+      var code: Vector[SimpleInstruction] = Vector()
+      var methodPositions:Map[IR.MtdSymbol, (Int, Variable[_])] = Map()
+
+      for (mtd <- market.methods) {
+        val compiledCode = compileMethod(mtd, args)
+        methodPositions = methodPositions + (mtd.sym -> (pos, compiledCode._1))
+
+        val method = _root_.code.shift(compiledCode._2 ++ Vector[SimpleInstruction](__return()), pos)
+        pos += method.length
+        code = code ++ method
+      }
+
+      var main = _root_.code.shift(_root_.code.compile(Interpreter(market.main, args, methodPositions)), pos)
+      code = code ++ main
+
+      // Set start pos to main´
+      m.main_pos = pos
+      m.algo_c = code
     }
   })
 
+  simu.init(actors)
   simu.run(7)
 
   val c: OpenCode[Int] = code"List(1,2,$farmerSelf).size"
@@ -127,6 +155,4 @@ object ManualEmbedding extends App {
   println(code"($farmerSelf: Farmer) => $c")
   println(f(new Farmer(new Market)))
 
-
-  //println((new TestLift).reflect(null))
 }

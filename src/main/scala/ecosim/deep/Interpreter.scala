@@ -1,7 +1,7 @@
 package ecosim.deep
 
 import _root_.Simulation.{RequestMessageInter, ResponseMessageInter, SimO}
-import code.{Instruction, __do, __doRuntime, __doblock, __dowhile, __forever, __if, __wait}
+import code.{Instruction, __call, __do, __doResult, __doblock, __dowhile, __forever, __goto, __if, __wait}
 import ecosim.runtime.Actor
 import ecosim.example.ex1.Market
 
@@ -18,12 +18,12 @@ object Interpreter {
   }
 
   // TODO: redefine callback handling for not passing callback forward where not needed
-  def apply[A: CodeType](algo: Algo[A], ass: mutable.ListBuffer[Assignment[_]], callback: (A => Unit) = null): Instruction = algo match {
+  def apply[A: CodeType](algo: Algo[A], ass: mutable.ListBuffer[Assignment[_]], methodMapping:Map[IR.MtdSymbol, (Int,Variable[_])]): Instruction = algo match {
     case Forever(bdy@_*) => {
       var l = List[Instruction]()
 
       for (el <- bdy) {
-        l = apply(el, ass, null) :: l
+        l = apply(el, ass, methodMapping) :: l
       }
 
       __forever(l.reverse: _*)
@@ -32,7 +32,7 @@ object Interpreter {
       var l = List[Instruction]()
 
       for (el <- bdy) {
-        l = apply(el, ass, null) :: l
+        l = apply(el, ass, methodMapping) :: l
       }
 
       __doblock(l.reverse: _*)
@@ -43,43 +43,41 @@ object Interpreter {
     case cM: CallMethodC[b, c] => {
       import cM.E
 
-      val v = Variable[b]
-      var mBody: Algo[A] = null
+      var mtdData:(Int,Variable[_]) = null
 
       __doblock(
         __do {
-          val meth = bindAll(ass.toList, cM.mtd).evalClosed
-          mBody = meth.body(v)
+          mtdData = methodMapping(bindAll(ass.toList, cM.sym).evalClosed)
 
           val arg = bindAll(ass.toList, cM.arg).evalClosed
-          ass.prepend(new Assignment(v, arg))
+          ass.prepend(new Assignment(mtdData._2.asInstanceOf[Variable[b]], arg))
         },
-        __doRuntime(
-          () => apply(mBody, ass, (value: A) => {
-            println("Got result CMC", value)
-          })
-        ),
-        __do {
+        __call(mtdData._1),
+        __doResult{result: Any =>
           ass.remove(0)
+          //Forward result
+          result
         }
       )
     }
     case cM: CallMethod[b, c] => {
       import cM.E
 
-      val v = Variable[b]
-      val mBody: Algo[A] = cM.mtd.body(v)
+      //TODO: how to return values
+      val mtdData:(Int,Variable[_]) = methodMapping(cM.sym)
 
       __doblock(
         __do {
+          var x = mtdData._2
+          var y = x.rep
           val arg = bindAll(ass.toList, cM.arg).evalClosed
-          ass.prepend(new Assignment(v, arg))
+          ass.prepend(new Assignment(mtdData._2.asInstanceOf[Variable[b]], arg))
         },
-        apply(mBody, ass, (value: A) => {
-          println("Got result", value)
-        }),
-        __do {
+        __call(mtdData._1),
+        __doResult{result: Any =>
           ass.remove(0)
+          //Forward result
+          result
         }
       )
     }
@@ -95,12 +93,12 @@ object Interpreter {
       var command = __doblock(
         __do {
           val receiver: Actor = bindAll(ass.toList, send.actorRef).evalClosed
-          val tmpVar = ass.head.v.asInstanceOf[Variable[Actor]]
+          val tmpVar = ass.last.v.asInstanceOf[Variable[Actor]]
           sender = bindAll(ass.toList, code"$tmpVar").evalClosed
 
           val arg = bindAll(ass.toList, send.msg.arg).evalClosed
 
-          requestMessage = RequestMessageInter(sender.id, receiver.id, send.msg.mtd, arg)
+          requestMessage = RequestMessageInter(sender.id, receiver.id, send.msg.mtd.sym, arg)
           sender.sendMessage(requestMessage)
 
           if (send.msg.mtd.isInstanceOf[BlockingMethod[_, _]]) {
@@ -119,10 +117,9 @@ object Interpreter {
           __dowhile(__wait(1))(responseMessage == null),
           __do {
             println("Got response!", responseMessage.arg)
-            if (callback != null) {
-              callback(responseMessage.arg)
-            }
+            val result = responseMessage.arg
             responseMessage = null
+            result
           }
         )
       )
@@ -141,7 +138,6 @@ object Interpreter {
         __do {
           val ls = bindAll(ass.toList, fe.ls).evalClosed
           iter = ls.iterator
-
         },
         __dowhile(
           __if(iter.hasNext)(
@@ -149,25 +145,17 @@ object Interpreter {
               val e = iter.next()
               ass.prepend(new Assignment(v, e))
             },
-            apply(al, ass, null),
+            apply(al, ass, methodMapping),
             __do {
               ass.remove(0)
             }
           )
         )(iter.hasNext),
-        __do {
-          if (callback != null) {
-            callback(())
-          }
-        }
       )
       command
     case ScalaCode(cde) => {
       __do {
-        val result = bindAll(ass.toList, cde).evalClosed
-        if (callback != null) {
-          callback(result)
-        }
+        bindAll(ass.toList, cde).evalClosed
       }
     }
     case LetBinding(bound, value, body) => {
@@ -188,10 +176,10 @@ object Interpreter {
       var algo2: Instruction = null
 
       if (oldAssOption.isDefined) {
-        algo2 = apply(body, ass, callback)
+        algo2 = apply(body, ass, methodMapping)
       } else {
         algo2 = __doblock(
-          apply(body, ass, callback),
+          apply(body, ass, methodMapping),
           __do {
             // Remove added element again
             ass.remove(0)
@@ -208,10 +196,10 @@ object Interpreter {
       var oldAssOption = ass.find(x => x.v == lb2.bound)
 
       val algo1 = __doblock(
-        apply(lb2.value, ass, (result: A) => {
+        apply(lb2.value, ass, methodMapping),
+        __doResult { result: Any =>
           valueInter = result
-        }),
-        __do {
+
           if (oldAssOption.isDefined) {
             val index = ass.indexWhere(_.v == lb2.bound)
             ass.update(index, new Assignment(lb2.bound, valueInter.asInstanceOf[A]))
@@ -224,10 +212,10 @@ object Interpreter {
       var algo2: Instruction = null
 
       if (oldAssOption.isDefined) {
-        algo2 = apply(lb2.body, ass, callback)
+        algo2 = apply(lb2.body, ass,methodMapping)
       } else {
         algo2 = __doblock(
-          apply(lb2.body, ass, callback),
+          apply(lb2.body, ass,methodMapping),
           __do {
             // Remove added element again
             ass.remove(0)

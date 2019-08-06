@@ -55,8 +55,10 @@ trait Executable[T] {
 
 package immutable {
 
+  import scala.collection.mutable.ListBuffer
 
-abstract class ThreadPrecursor[T: Numeric] extends Precursor[T, Thread[T]] {
+
+  abstract class ThreadPrecursor[T: Numeric] extends Precursor[T, Thread[T]] {
   val prog: Vector[code.SimpleInstruction]
 
   def start(start_time: T) : Thread[T] = new Thread[T](this, start_time)
@@ -75,7 +77,7 @@ class Thread[T: Numeric](
   def run_until(until: T) : Option[(Thread[T], T)] = {
     val tp2 = tp; // TODO tp.mycopy()
 
-    val (p, t, n) = code.exec[T](tp2.prog, pos, time, until);
+    val (p, t, n) = code.exec[T](tp2.prog, pos, time, until, ListBuffer());
 
     n match {
       case Some(nt) => Some((new Thread(tp2, t, p), nt))
@@ -136,8 +138,10 @@ class ParallelExecutor[T: Numeric, S <: Executable[T]](
 
 package mutable {
 
+  import scala.collection.mutable.ListBuffer
 
-abstract class ThreadPrecursor[T: Numeric] extends Precursor[T, Thread[T]] {
+
+  abstract class ThreadPrecursor[T: Numeric] extends Precursor[T, Thread[T]] {
   val prog: Vector[code.SimpleInstruction]
 
   def start(start_time: T) : Thread[T] = new Thread[T](this, start_time)
@@ -170,7 +174,7 @@ class Thread[T : Numeric](
 
   /** Runs until at most time `until`. */
   def run_until(until: T) : Option[(Thread[T], T)] = {
-    val (p, t, n) = code.exec[T](tp.prog, pos, time, until);
+    val (p, t, n) = code.exec[T](tp.prog, pos, time, until, ListBuffer());
     pos = p; time = t;
 
     n match {

@@ -2,6 +2,8 @@ package Simulation
 import code._
 import Owner._
 
+import scala.collection.mutable.ListBuffer
+
 
 trait Sim {
   type T = Int // time type
@@ -9,6 +11,7 @@ trait Sim {
 
   // BEGIN state
   private var current_pos  : Int = 0
+  var main_pos  : Int = 0
   protected var current_time : T   = zero
   // END state
 
@@ -17,26 +20,30 @@ trait Sim {
 
   /** Call from the constructor in inheriting classes. */
   protected def init(start_time: T) {
-    current_pos    = 0;
+    current_pos    = main_pos;
     current_time   = start_time;
-    algo_c = compile(algo)
+    //algo_c = compile(algo)
   }
 
   protected def copy_state_to(_to: Sim) {
     _to.current_pos    = current_pos
     _to.current_time   = current_time;
-    _to.algo_c = compile(_to.algo);
+    //_to.algo_c = compile(_to.algo);
   }
+
+  private val execStack:ListBuffer[Any] = ListBuffer()
+  private val returnValue:ReturnValue = new ReturnValue()
 
   /** Runs until at most time `until`. */
   def run_until(until: T) = {
     val (a, b, next_goal_time) =
-      exec[T](algo_c, current_pos, current_time, until);
+      exec[T](algo_c, current_pos, current_time, until, execStack, returnValue);
 
     current_pos = a;
     current_time = b;
     (this, next_goal_time)
   }
+
 }
 
 

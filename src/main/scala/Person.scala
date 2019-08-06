@@ -61,9 +61,9 @@ class Person(
       }
     ),
     //__syncMessage(() => referencePerson.sell(10,10)),
-    __syncMessage(this, () => referencePerson.id, (result:Any) => {
+    /*__syncMessage(this, () => referencePerson.id, (result:Any) => {
       println(result.asInstanceOf[(Boolean,Boolean)]._1)
-    }, x => x.asInstanceOf[Person].sell(10,10)),
+    }, x => x.asInstanceOf[Person].sell(10,10)),*/
     __do {
 
       if (active) {

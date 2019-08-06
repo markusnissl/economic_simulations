@@ -1,20 +1,47 @@
 import Simulation.{AgentId, Message, RequestMessage, ResponseMessage}
+
+import scala.collection.mutable.ListBuffer
 package code {
 
   import Owner.Owner
   import Simulation.{AgentId, Message}
 
+  import scala.collection.mutable.ListBuffer
+
+  /**
+    * This class is needed as a wrapper so that value can be used as 'out' parameter for returning result
+    */
+  class ReturnValue {
+    var value:Any = null
+  }
 
   abstract class Instruction extends Serializable
 
 
   /** An instruction that can be directly executed. */
   abstract class SimpleInstruction extends Instruction {
-    def exec(pos: Int): Int
+    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int
   }
 
   case class __wait[T](ticks: T) extends SimpleInstruction {
-    def exec(pos: Int): Int = pos + 1
+    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = pos + 1
+  }
+
+  class __call(f: => Int) extends  SimpleInstruction {
+    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
+      executionStack.prepend(pos+1) //Return to next pos
+      f
+    }
+  }
+
+  object __call {
+    def apply(f: => Int) = new __call(f)
+  }
+
+  case class __return() extends SimpleInstruction {
+    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
+      executionStack.remove(0).asInstanceOf[Int]
+    }
   }
 
   class __goto(_cond: => Boolean, _next_pos: Int) extends SimpleInstruction {
@@ -22,7 +49,7 @@ package code {
 
     val next_pos = _next_pos
 
-    def exec(pos: Int): Int = if (_cond) _next_pos else pos + 1
+    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = if (_cond) _next_pos else pos + 1
 
     override def toString = "__goto(?, " + _next_pos + ")"
   }
@@ -38,18 +65,32 @@ package code {
     * val parameters may not be call by name. Same for [[__goto]],
     * [[__repeat]], and [[__dowhile]].
     */
-  class __do(f: => Unit) extends SimpleInstruction {
-    def exec(pos: Int): Int = {
-      f; pos + 1
+  class __do(f: => Any) extends SimpleInstruction {
+    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
+      returnValue.value = f;
+      pos + 1
     }
 
     override def toString = "__do{?}"
   }
 
   object __do {
-    def apply(f: => Unit) = new __do(f)
+    def apply(f: => Any) = new __do(f)
   }
 
+  // For handling the result of the previous do
+  class __doResult(f: Any => Any) extends SimpleInstruction {
+    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
+      returnValue.value = f(returnValue.value);
+      pos + 1
+    }
+
+    override def toString = "__doResult{?}"
+  }
+
+  object __doResult {
+    def apply(f: Any => Any) = new __doResult(f)
+  }
 
 
   /** An instruction that needs to be compiled down to SimpleInstructions
@@ -57,24 +98,8 @@ package code {
     */
   abstract class SugarInstruction extends Instruction
 
-  // Todo/Fixme: Add support for wait in runtime execution
-  case class __doRuntime(block: () => Instruction) extends SimpleInstruction {
-    def exec(pos: Int): Int = {
-      val innerProgram:Vector[SimpleInstruction] = compile(block())
-      var innerPos = 0
-
-      while (innerPos < innerProgram.length) {
-        if (innerProgram(innerPos).isInstanceOf[__wait[_]]) {
-          throw new Exception("Wait operation is currently not supported")
-        }
-        innerPos = innerProgram(innerPos).exec(innerPos);
-      }
-
-      pos + 1
-    }
-  }
-
   case class __forever(block: Instruction*) extends SugarInstruction
+
   case class __doblock(block: Instruction*) extends SugarInstruction
 
   /** WARNING: compiling [[__repeat]] creates state that cannot be copied when
@@ -128,21 +153,6 @@ package code {
       Some((r.cond _, r.block))
   }
 
-  class __syncMessage(_sender: Owner, _receiver: () => AgentId, _callback_f: Any => Unit, _call_f: Any => Any) extends SugarInstruction {
-    val sender = _sender
-    val receiver = _receiver
-    val callback_f = _callback_f
-    val call_f = _call_f
-  }
-
-  object __syncMessage {
-    def apply(_sender: Owner, _receiver: () => AgentId, _callback_f: Any => Unit, _call_f: Any => Any):__syncMessage = {
-      new __syncMessage(_sender, _receiver, _callback_f, _call_f)
-    }
-
-    def unapply(sM: __syncMessage) = Some((sM.sender, sM.receiver, sM.callback_f, sM.call_f))
-  }
-
 
 } // package code
 
@@ -150,15 +160,17 @@ package code {
 package object code {
 
 
+  /* Shifts all mentioned absolute code positions by offset. */
+  def shift(v: Vector[SimpleInstruction], offset: Int) =
+    v.map(_ match {
+      case __goto(c, new_pos) => __goto(c(), new_pos + offset)
+      case other@_ => other
+    })
+
   /** Turns SugarInstructions into SimpleInstructions.
     */
   def compile(p: Instruction): Vector[SimpleInstruction] = {
-    /* Shifts all mentioned absolute code positions by offset. */
-    def shift(v: Vector[SimpleInstruction], offset: Int) =
-      v.map(_ match {
-        case __goto(c, new_pos) => __goto(c(), new_pos + offset)
-        case other@_ => other
-      })
+
 
     /* Compiles a vector of instructions.
        Recursively maintains instruction offsets and makes sure absolute
@@ -195,27 +207,10 @@ package object code {
           i += 1;
           if (i < k()) true
           else {
-            i = 0; false
+            i = 0;
+            false
           }
         }))
-      }
-      case __syncMessage(sender, receiver, callback_f, call_f) => {
-        var m:ResponseMessage = null
-        var cb: Any => Unit = null
-
-        var before = __do {
-            var msg:Message = RequestMessage(sender.id, receiver(), call_f)
-            cb = callback_f
-            sender.setMessageResponseHandler(msg.sessionId, (responseMessage:Message) => {
-              m = responseMessage.asInstanceOf[ResponseMessage]
-            })
-            sender.sendMessage(msg)
-          }
-        var after = __do {
-          cb(m.result)
-        }
-
-        Vector(before) ++ compile(__dowhile(__wait(1))(m == null)) ++ Vector(after)
       }
       case a@_ if a.isInstanceOf[SimpleInstruction] =>
         Vector(a.asInstanceOf[SimpleInstruction])
@@ -247,17 +242,22 @@ package object code {
     *         (`pos == program.length`, that is, the program terminates).
     *         *
     * @example One can chain calls to exec: If until1 < until2,
-    *          {{{
+    * {{{
     * val (p2, t2, _) = exec(prog, p1, t1, until1);
     * exec(prog, p2, t2, until2)
     * }}}
     *          will have the same result and effects as
-    *          {{{
+    * {{{
     * exec(prog, p1, t1, until2)
     * }}}
     */
   def exec[T: Numeric](
-                        program: Vector[SimpleInstruction], _pos: Int, _time: T, end_time: T
+                        program: Vector[SimpleInstruction],
+                        _pos: Int,
+                        _time: T,
+                        end_time: T,
+                        executionStack: ListBuffer[Any],
+                        returnValue: ReturnValue = new ReturnValue()
                       ): (Int, T, Option[T]) = {
     var pos = _pos;
     var time = _time;
@@ -277,7 +277,7 @@ package object code {
 
     while ((pos < program.length) && lte(next_time, end_time)) {
       time = next_time;
-      pos = program(pos).exec(pos);
+      pos = program(pos).exec(pos, executionStack, returnValue);
     }
 
 
@@ -332,27 +332,27 @@ package object code {
     * val s2 = new MySim("b");
     * execp[MySim, Int](Vector(s1, s2), execf, 3, 6)
     * }}}
-    *          will print
-    *          {{{
+    * will print
+    * {{{
     * aaabbbbababab
     * }}}
-    *          The function `execp`
-    *          first brings `s1` up to time 3, which needs three iterations of the
-    *          loop in prog from time 1 (including 1), then it brings up `s2` from time 0
-    *          (four iterations, 0, 1, 2, 3), and then there are three parallel iterations
-    *          from step 4 to 6.
-    *          *
-    *          Calls to `execp` can be composed. If this is done, the return value of the
-    *          first call should be used as the start time of the second:
-    *          {{{
+    * The function `execp`
+    * first brings `s1` up to time 3, which needs three iterations of the
+    * loop in prog from time 1 (including 1), then it brings up `s2` from time 0
+    * (four iterations, 0, 1, 2, 3), and then there are three parallel iterations
+    * from step 4 to 6.
+    * *
+    * Calls to `execp` can be composed. If this is done, the return value of the
+    * first call should be used as the start time of the second:
+    * {{{
     * val Some(t) = execp[MySim, Int](Vector(s1, s2), execf, 3, 6);
     * execp[MySim, Int](Vector(s1, s2), execf, t, 10)
     * }}}
-    *          will do the same as
-    *          {{{
+    * will do the same as
+    * {{{
     * execp[MySim, Int](Vector(s1, s2), execf, 3, 10)
     * }}}
-    *          no matter what the sims do.
+    * no matter what the sims do.
     */
   def execp[S, T: Numeric](
                             sims: Seq[S],

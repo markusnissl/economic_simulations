@@ -55,7 +55,7 @@ case class RequestMarketData(override val senderId: AgentId, override val receiv
 case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: Timeseries[List[SalesRecord]]) extends Message
 
 // General message
-case class RequestMessageInter[A,B](override val senderId: AgentId, override val receiverId: AgentId, mtd: NonLocalMethod[A,B], arg: A) extends Message {
+case class RequestMessageInter[A,B](override val senderId: AgentId, override val receiverId: AgentId, sym: IR.MtdSymbol, arg: A) extends Message {
   //Fixme: adapt for working in a way compatible to interpeter
   def reply(owner: Owner, returnValue:Any): Unit = {
     val msg = ResponseMessageInter(receiverId, senderId, returnValue)
