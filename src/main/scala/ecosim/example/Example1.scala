@@ -64,7 +64,7 @@ object ManualEmbedding extends App {
 
   val marketSelf = Variable[Market]
 
-  val handleMessage = Foreach(code"$marketSelf.getRequestMessages", (p: Variable[_root_.Simulation.RequestMessageInter[Any,Unit]]) => CallMethodC(code"$p.mtd", code"$p.arg"))
+//  val handleMessage = Foreach(code"$marketSelf.getRequestMessages", (p: Variable[_root_.Simulation.RequestMessageInter[Any,Unit]]) => CallMethodC(code"$p.mtd", code"$p.arg"))
 
   val bindingTest = Variable[Int]
 
@@ -72,7 +72,7 @@ object ManualEmbedding extends App {
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
     Nil,
     Forever(
-      handleMessage,
+//      handleMessage,
       LetBinding(bindingTest, code"$bindingTest + 1", ScalaCode(code"""println("Binding test:",$bindingTest)""")),
       CallMethod[Int, Boolean](marketSellB, code"10"),
       CallMethod(marketSell2, code"(10, List(1,2,3))"),
@@ -90,12 +90,12 @@ object ManualEmbedding extends App {
   val farmer = ActorType[Farmer]("Farmer",
     State[Int](IR.methodSymbol[Farmer]("happiness"), code"0") ::
       State[List[Farmer]](IR.methodSymbol[Farmer]("peers"), code"Nil") :: Nil,
-    NonBlockingMethod(IR.methodSymbol[Farmer]("notifyPeers"),
-      (arg: Variable[Unit]) =>
-        Foreach[Farmer, Unit](code"$farmerSelf.peers", (p: Variable[Farmer]) =>
-          Send[(Actor, Int), Unit](code"$p", Message(notifySym, code"($farmerSelf, $farmerSelf.happiness)"))
-        )
-    ) :: Nil,
+//    NonBlockingMethod(IR.methodSymbol[Farmer]("notifyPeers"),
+//      (arg: Variable[Unit]) =>
+//        Foreach[Farmer, Unit](code"$farmerSelf.peers", (p: Variable[Farmer]) =>
+//          Send[(Actor, Int), Unit](code"$p", Message(notifySym, code"($farmerSelf, $farmerSelf.happiness)"))
+ //       ))
+         Nil,
     Forever(
       LetBinding2[Boolean,Unit](testResult,Send[Int, Boolean](code"$farmerSelf.market", Message(marketSellB, code"500")), ScalaCode(code"""println("TEST_VAR",$testResult)""")),
       Wait(code"1")

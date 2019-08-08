@@ -134,7 +134,7 @@ object Interpreter {
 
       var iter:Iterator[b] = null
       val v = Variable[b]
-      val al: Algo[A] = fe.f(v)
+      val al: Algo[A] = fe.f
 
 
       var command = __doblock(
