@@ -6,38 +6,54 @@ import IR.Predef._
 import IR.TopLevel._
 
 class Lifter {
-  def apply(actorClasses: List[Clasz[_]]) = {
-    var actorTypes: List[ActorType[_]] = List()
-    actorClasses.foreach(clasz => {
-      var actorMethods: List[Method[_, _]] = List()
+  def apply(startClasses: List[Clasz[_]]) = {
+    var endTypes: List[ActorType[_]] = List()
+    startClasses.foreach((clasz: Clasz[_]) => {
+      var endStates: List[State[_]] = List()
+      //TODO check if this works well, seems like theres something wrong with the type of created states
+      clasz.fields.foreach(field => {
+        endStates = State(IR.MtdSymbol(field.symbol), field.init) :: endStates
+        //endStates = State(IR.methodSymbol[Actor1](field.symbol.asMethodSymbol.name.toString), field.init) :: endStates
+      })
+      var endMethods: List[Method[_, _]] = List()
       clasz.methods.foreach(method => {
         val cde = method.body
         println(liftCode(cde))
         //val variable1 = Variable[Int]
-        actorMethods = LocalMethod(ecosim.deep.IR.methodSymbol[Actor1](method.symbol.asMethodSymbol.name.toString), (variable1: Variable[Int]) => ScalaCode(code"""println("test")""")) :: actorMethods
+        endMethods = LocalMethod(ecosim.deep.IR.methodSymbol[Actor1](method.symbol.asMethodSymbol.name.toString), (variable1: Variable[Int]) => ScalaCode(code"""println("test")""")) :: endMethods
       })
-      actorTypes = ActorType[Actor1](clasz.name, List(), actorMethods, Forever(actorMethods.head.asInstanceOf[LocalMethod[Int, _]].body(Variable[Int])), Variable[Actor1]) :: actorTypes
+      //TODO: fix the type param of ActorType
+      endTypes = ActorType[Actor1](clasz.name, endStates, endMethods, Forever(endMethods.head.asInstanceOf[LocalMethod[Int, _]].body(Variable[Int])), clasz.self.asInstanceOf[Variable[Actor1]]) :: endTypes
     })
     //TODO: return a simulation with all actor types,
     //TODO: initialization of actors
-    ecosim.deep.Simulation(actorTypes, code"val a = new Actor1; List(a)")
+    ecosim.deep.Simulation(endTypes, code"val a = new Actor1; List(a)")
   }
 
   def liftCode[T: CodeType](cde: OpenCode[T]): Algo[T] = {
+//    base.debugFor(
     cde match {
-      case code"val $x: $xt = $v; $body: T" => LetBinding(x, v, liftCode(body))
-        //TODO change foreach so that it doesnt allow any, but as a type, but rather Unit
+      case code"val $x: $xt = $v; $rest: T" =>
+        LetBinding2(Some(x), ScalaCode(v), liftCode(rest))
+      case code"$e; $rest: T" =>
+        LetBinding2(None, liftCode(e), liftCode(rest))
       case code"($x: List[$tb]).foreach[$ta](($y: tb) => $foreachbody)" =>
-        val f: Foreach[tb.Typ, Any] = Foreach(x, y, liftCode(foreachbody).asInstanceOf[Algo[Any]])
+        val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()"))
         f.asInstanceOf[Algo[T]]
       case code"while(true) $body" =>
         val f = Forever(liftCode(body))
         f.asInstanceOf[Algo[T]]
-      case code"$e; $rest: T" =>
-        println("SUCCESS")
-        ScalaCode(e.asInstanceOf[OpenCode[T]])
-      case _ => println("fail"); ScalaCode(cde)
+        //TODO method calls, and message sending
+//      case code"($x: Actor1).$met($y: Int)" =>
+//        println(x)
+//        null
+//        println(obj)
+//        println(meth)
+//        println(params)
+//        ScalaCode(cde)
+      case _ => ScalaCode(cde)
     }
+//    )
   }
 }
 
