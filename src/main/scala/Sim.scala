@@ -10,7 +10,7 @@ trait Sim {
   private val zero : T = 0
 
   // BEGIN state
-  private var current_pos  : Int = 0
+  protected var current_pos  : Int = 0
   var main_pos  : Int = 0
   protected var current_time : T   = zero
   // END state

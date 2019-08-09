@@ -5,8 +5,6 @@ import java.util.UUID
 import Commodities.Commodity
 import Owner.{ITEM_T, Owner, SalesRecord}
 import Timeseries.Timeseries
-import ecosim.deep
-import ecosim.deep.{IR, NonLocalMethod}
 
 
 abstract class Message extends Serializable {
@@ -55,15 +53,16 @@ case class RequestMarketData(override val senderId: AgentId, override val receiv
 case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: Timeseries[List[SalesRecord]]) extends Message
 
 // General message
-case class RequestMessageInter[A,B](override val senderId: AgentId, override val receiverId: AgentId, sym: IR.MtdSymbol, arg: A) extends Message {
+import ecosim.deep.IR.Predef._
+case class RequestMessageInter[A,B](override val senderId: AgentId, override val receiverId: AgentId, methodId: Int, arg: A)(implicit val B:CodeType[B]) extends Message {
   //Fixme: adapt for working in a way compatible to interpeter
   def reply(owner: Owner, returnValue:Any): Unit = {
-    val msg = ResponseMessageInter(receiverId, senderId, returnValue)
+    val msg = ResponseMessageInter[Any](receiverId, senderId, returnValue)
     msg.sessionId = this.sessionId
     owner.sendMessage(msg)
   }
 }
-case class ResponseMessageInter[A,B](override val senderId: AgentId, override val receiverId: AgentId, arg: A) extends Message
+case class ResponseMessageInter[A](override val senderId: AgentId, override val receiverId: AgentId, arg: A) extends Message
 
 case class RequestMessage(override val senderId: AgentId, override val receiverId: AgentId, call_f: Any => Any) extends Message {
 

@@ -20,6 +20,21 @@ class Actor extends SimO {
     //Ignore warning, handled by fragment in logic
   })
 
+  var stepFunction: (Int, Int, Int) => (Int, Int) = null
+  var useStepFunction = false
+  //Override with compiled function, has to be set before
+  override def run_until(until: T) = {
+    if (useStepFunction) {
+      println("Run until", current_pos, current_time)
+      val (a, b) = stepFunction(current_pos, current_time, until)
+      println("Run until finished", a, b)
+      current_pos = a;
+      current_time = b;
+      (this, Some(b + 1))
+    } else {
+      super.run_until(until)
+    }
+  }
 }
 class Simulation {
   

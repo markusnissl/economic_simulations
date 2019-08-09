@@ -10,6 +10,7 @@ import scala.collection.mutable
 object Interpreter {
 
   import IR.Predef._
+  import squid.lib.MutVar
 
   class Assignment[V: CodeType](val v: Variable[V], arg: => V)(implicit val V: CodeType[V]) {
     def getArg: V = arg
@@ -17,13 +18,12 @@ object Interpreter {
     override def toString: String = "Assignment(" + v + "," + arg + ")"
   }
 
-  // TODO: redefine callback handling for not passing callback forward where not needed
-  def apply[A: CodeType](algo: Algo[A], ass: mutable.ListBuffer[Assignment[_]], methodMapping:Map[IR.MtdSymbol, (Int,Variable[_])]): Instruction = algo match {
+  def apply[A: CodeType](algo: Algo[A], ass: mutable.ListBuffer[Assignment[_]], methodMapping:Map[IR.MtdSymbol, (Int,Variable[_])], methodIdMapping: Map[Int, IR.MtdSymbol]): Instruction = algo match {
     case Forever(bdy@_*) => {
       var l = List[Instruction]()
 
       for (el <- bdy) {
-        l = apply(el, ass, methodMapping) :: l
+        l = apply(el, ass, methodMapping, methodIdMapping) :: l
       }
 
       __forever(l.reverse: _*)
@@ -32,7 +32,7 @@ object Interpreter {
       var l = List[Instruction]()
 
       for (el <- bdy) {
-        l = apply(el, ass, methodMapping) :: l
+        l = apply(el, ass, methodMapping, methodIdMapping) :: l
       }
 
       __doblock(l.reverse: _*)
@@ -47,7 +47,8 @@ object Interpreter {
 
       __doblock(
         __do {
-          mtdData = methodMapping(bindAll(ass.toList, cM.sym).evalClosed)
+          val methodSym:IR.MtdSymbol = methodIdMapping(cM.methodId.unsafe_asClosedCode.run)
+          mtdData = methodMapping(methodSym)
 
           val arg = bindAll(ass.toList, cM.arg).evalClosed
           ass.prepend(new Assignment(mtdData._2.asInstanceOf[Variable[b]], arg))
@@ -63,7 +64,6 @@ object Interpreter {
     case cM: CallMethod[b, c] => {
       import cM.E
 
-      //TODO: how to return values
       val mtdData:(Int,Variable[_]) = methodMapping(cM.sym)
 
       __doblock(
@@ -87,18 +87,18 @@ object Interpreter {
       var blocking = false
       var requestMessage: RequestMessageInter[_, _] = null
       var sender: SimO = null
-      var responseMessage: ResponseMessageInter[A, _] = null
+      var responseMessage: ResponseMessageInter[A] = null
 
 
       var command = __doblock(
         __do {
           val receiver: Actor = bindAll(ass.toList, send.actorRef).evalClosed
-          val tmpVar = ass.last.v.asInstanceOf[Variable[Actor]]
-          sender = bindAll(ass.toList, code"$tmpVar").evalClosed
+          val sender: Actor = bindAll(ass.toList,send.actorFrom).evalClosed
 
           val arg = bindAll(ass.toList, send.msg.arg).evalClosed
 
-          requestMessage = RequestMessageInter(sender.id, receiver.id, send.msg.mtd.sym, arg)
+
+          requestMessage = RequestMessageInter[b,c](sender.id, receiver.id, methodIdMapping.map(_.swap).get(send.msg.mtd.sym).get, arg)
           sender.sendMessage(requestMessage)
 
           if (send.msg.mtd.isInstanceOf[BlockingMethod[_, _]]) {
@@ -106,12 +106,11 @@ object Interpreter {
           } else {
             blocking = false
           }
-          blocking = true
         },
         __if(blocking)(
           __do {
             sender.setMessageResponseHandler(requestMessage.sessionId, (response: _root_.Simulation.Message) => {
-              responseMessage = response.asInstanceOf[ResponseMessageInter[A, _]]
+              responseMessage = response.asInstanceOf[ResponseMessageInter[A]]
             })
           },
           __dowhile(__wait(1))(responseMessage == null),
@@ -145,7 +144,7 @@ object Interpreter {
               val e = iter.next()
               ass.prepend(new Assignment(v, e))
             },
-            apply(al, ass, methodMapping),
+            apply(al, ass, methodMapping, methodIdMapping),
             __do {
               ass.remove(0)
             }
@@ -176,10 +175,10 @@ object Interpreter {
 
       var algo2: Instruction = __doblock(
         __if(oldAssOption.isDefined)(
-          apply(body, ass, methodMapping)
+          apply(body, ass, methodMapping, methodIdMapping)
         ),
         __if(!oldAssOption.isDefined)(
-          apply(body, ass, methodMapping),
+          apply(body, ass, methodMapping, methodIdMapping),
           __do {
             // Remove added element again
             ass.remove(0)
@@ -199,7 +198,7 @@ object Interpreter {
         __do{
           oldAssOption = ass.find(x => x.v == lb2.bound)
         },
-        apply(lb2.value, ass, methodMapping),
+        apply(lb2.value, ass, methodMapping, methodIdMapping),
         __doResult { result: Any =>
           valueInter = result
 
@@ -214,10 +213,10 @@ object Interpreter {
 
       var algo2: Instruction = __doblock(
         __if(oldAssOption.isDefined)(
-          apply(lb2.body, ass,methodMapping)
+          apply(lb2.body, ass,methodMapping, methodIdMapping)
         ),
         __if(!oldAssOption.isDefined)(
-          apply(lb2.body, ass,methodMapping),
+          apply(lb2.body, ass,methodMapping, methodIdMapping),
           __do {
             // Remove added element again
             ass.remove(0)

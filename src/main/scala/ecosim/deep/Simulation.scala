@@ -6,6 +6,7 @@ import code.{SimpleInstruction, __return}
 import ecosim.deep.Interpreter.Assignment
 
 import scala.collection.mutable.ListBuffer
+import squid.lib.MutVar
 
 case class Message[A,R](mtd: NonLocalMethod[A,R], arg: OpenCode[A])
 
@@ -14,11 +15,12 @@ case class Forever(body: Algo[_]*) extends Algo[Unit]
 case class Block(body: Algo[_]*) extends Algo[Unit]
 case class Wait(cde: OpenCode[Int]) extends Algo[Unit]
 case class CallMethod[E, R: CodeType](sym: IR.MtdSymbol, arg: OpenCode[E])(implicit val E: CodeType[E]) extends Algo[R]
-case class CallMethodC[E, R: CodeType](sym: OpenCode[IR.MtdSymbol], arg: OpenCode[E])(implicit val E: CodeType[E]) extends Algo[R]
-case class Send[E,R:CodeType](actorRef: OpenCode[runtime.Actor], msg: Message[E,R])(implicit val E: CodeType[E]) extends Algo[R]
+case class CallMethodC[E, R: CodeType](methodId: OpenCode[Int], arg: OpenCode[E])(implicit val E: CodeType[E]) extends Algo[R]
+case class Send[E,R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: Message[E,R])(implicit val E: CodeType[E], implicit val R:CodeType[R]) extends Algo[R]
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], f: Variable[E] => Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
-case class LetBinding[V: CodeType, A: CodeType](bound: Variable[V], value: OpenCode[V], body: Algo[A]) extends Algo[A]
+
+case class LetBinding[V: CodeType, A: CodeType](bound: Variable[V], value: OpenCode[V], body: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
 case class LetBinding2[V: CodeType, A: CodeType](bound: Variable[V], value: Algo[V], body: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
 
 sealed abstract class Method[A,R](implicit val A: CodeType[A]) {
@@ -42,15 +44,14 @@ case class State[A](sym: IR.MtdSymbol, init: OpenCode[A])(implicit val tpe: Code
 
 case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], methods: List[Method[_,_]], main: Algo[Unit], self: Variable[X])(implicit val X:CodeType[X]){
 
-
-  private def compileMethod[A](method: Method[A,_], args:ListBuffer[Assignment[_]]): (Variable[_], Vector[SimpleInstruction]) = {
+  private def compileMethod[A](method: Method[A,_], args:ListBuffer[Assignment[_]], methodIdMapping: Map[Int, IR.MtdSymbol]): (Variable[_], Vector[SimpleInstruction]) = {
     import method.A
     val methodArgs = Variable[A];
     val methodAlgo = method.body(methodArgs)
-    (methodArgs, _root_.code.compile(Interpreter(methodAlgo, args, null)))
+    (methodArgs, _root_.code.compile(Interpreter(methodAlgo, args, null, methodIdMapping)))
   }
 
-  def compile(selfRef: runtime.Actor): (Int, Vector[SimpleInstruction]) = {
+  def compile(selfRef: runtime.Actor, methodIdMapping: Map[Int, IR.MtdSymbol]): (Int, Vector[SimpleInstruction]) = {
     var pos = 0
     var code: Vector[SimpleInstruction] = Vector()
     val args = ListBuffer[Assignment[_]](new Assignment(self, selfRef.asInstanceOf[X]))
@@ -58,7 +59,7 @@ case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], me
     var methodPositions:Map[IR.MtdSymbol, (Int, Variable[_])] = Map()
 
     for (mtd <- this.methods) {
-      val compiledCode = compileMethod(mtd, args)
+      val compiledCode = compileMethod(mtd, args, methodIdMapping)
       methodPositions = methodPositions + (mtd.sym -> (pos, compiledCode._1))
 
       val method = _root_.code.shift(compiledCode._2 ++ Vector[SimpleInstruction](__return()), pos)
@@ -66,15 +67,21 @@ case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], me
       code = code ++ method
     }
 
-    val main = _root_.code.shift(_root_.code.compile(Interpreter(this.main, args, methodPositions)), pos)
+    val main = _root_.code.shift(_root_.code.compile(Interpreter(this.main, args, methodPositions, methodIdMapping)), pos)
     code = code ++ main
 
     (pos, code )
   }
 
+  // Just for testing at the moment
+  def codegen(selfRef: X, methodIdMapping: Map[Int, IR.MtdSymbol]): (Int, Int, Int) => (Int, Int) = {
+    val cg = new Codegen[X](methodIdMapping, this)
+    cg.compile(selfRef)
+  }
+
 }
 
-case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]]) {
+case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]], methodIdMapping: Map[Int, IR.MtdSymbol]) {
 
   def compile(): List[runtime.Actor] = {
     val actors = this.init.unsafe_asClosedCode.run
@@ -86,7 +93,7 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
 
       val actorType = actorTypeSearch.get
 
-      val info = actorType.compile(a)
+      val info = actorType.compile(a, methodIdMapping)
 
       //TODO: handle states
       /*actorType.state.foreach(s => {
@@ -95,6 +102,31 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
 
       a.main_pos = info._1
       a.algo_c = info._2
+    })
+
+    actors
+  }
+
+  def codegen(): List[runtime.Actor] = {
+    val actors = this.init.unsafe_asClosedCode.run
+    actors.foreach(a => {
+      val actorTypeSearch = actorTypes.find(_.name == a.getClass.getSimpleName)
+      if (actorTypeSearch.isEmpty) {
+        throw new Exception("Actor Type not defined")
+      }
+
+      val actorType = actorTypeSearch.get
+
+      actorType match {
+        case aT:ActorType[c] => {
+          import aT.X
+          a.stepFunction = actorType.asInstanceOf[ActorType[c]].codegen(a.asInstanceOf[c], methodIdMapping)
+          a.useStepFunction = true
+        }
+
+      }
+
+
     })
 
     actors
