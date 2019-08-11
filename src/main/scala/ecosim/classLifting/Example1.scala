@@ -2,6 +2,15 @@ package ecosim.classLifting
 import squid.quasi._
 import ecosim.runtime.Actor
 
+//TODO: make a new annotation for main method?
+@lift
+class MainClass {
+  def mainLoop(): List[Actor] = {
+    val a = new Actor1()
+    List(new Actor1(), new Actor1(), a)
+  }
+}
+
 case class Other() {
   def met2(par1: String) = {
     println(par1)
@@ -15,17 +24,27 @@ class Actor1 extends Actor {
   var c = 10
   var g = "string"
   var other = Other()
-  //def met2(a: Int) = println("whoa")
-  def met1(par1: Int, par2: Int) = {
-//    met2(2)
-    a.foreach(x => b.foreach(y => println(x + y)))
-    var d = 0
-    while (true) {
-      a.foreach(var1 => b.foreach(var2 => {
-        d = var1 + var2
-        println(d)
-      }))
+  def loop() = {
+    while(true) {
+      a.foreach(x => {
+        met2(x)
+      })
     }
+  }
+  def met2(a: Int) = if (a == 3) println(a)
+  def met3(): String = {other.met2("afk"); "afk"}
+  def met1(par1: Int, par2: Int) = {
+    met2(2)
+    3
+
+//    a.foreach(x => b.foreach(y => println(x + y)))
+//    var d = 0
+//    while (true) {
+//      a.foreach(var1 => b.foreach(var2 => {
+//        d = var1 + var2
+//        println(d)
+//      }))
+//    }
 //    while (true) {
 //      a.foreach(x => println(x))
 //    }
