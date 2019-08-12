@@ -66,6 +66,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
   }
 
 
+  var varSavers = Map[Variable[_], Variable[MutVar[Any]]]()
 
 
 
@@ -231,25 +232,48 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
       case lb: LetBinding[v, a] => {
         import lb.V
 
-        //TODO: solve rebindings to same var as not defining new var, if in same method
-        val bindingMut = Variable[MutVar[Any]]
-        variables = VarWrapper(lb.bound.asInstanceOf[Variable[Any]], bindingMut, code"null") :: variables
+        var bindingMut = Variable[MutVar[Any]]
 
-        val met: OpenCode[Unit] = code"""$bindingMut := ${lb.value};  $pos := ($pos!) + 1; ()"""
+        var contained = false
+        if (varSavers.contains(lb.bound)) {
+          bindingMut = varSavers(lb.bound)
+          contained = true
+        } else {
+          variables = VarWrapper(lb.bound.asInstanceOf[Variable[Any]], bindingMut, code"null") :: variables
+          varSavers = varSavers + (lb.bound -> bindingMut)
+        }
 
-        val met2 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMut!).asInstanceOf[v]")
+        val bindingMutFinal = bindingMut
+
+        val met: OpenCode[Unit] = code"""$bindingMutFinal := ${lb.value};  $pos := ($pos!) + 1; ()"""
+        val met2 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMutFinal!).asInstanceOf[v]")
+
+        if (!contained) {
+          varSavers = varSavers.filter(_._1 != lb.bound)
+        }
+
+
         code"""List(() => $met) ::: $met2"""
       }
       case lb: LetBinding2[v, a] => {
         import lb.V
 
-        //TODO: solve rebindings to same var as not defining new var, if in same method
-        val bindingMut2 = Variable[MutVar[Any]]
-        variables = VarWrapper(lb.bound.asInstanceOf[Variable[Any]], bindingMut2, code"null") :: variables
+        var bindingMut2 = Variable[MutVar[Any]]
+        var contained = false
+
+        if (varSavers.contains(lb.bound)) {
+          bindingMut2 = varSavers(lb.bound)
+          contained = true
+        } else {
+          variables = VarWrapper(lb.bound.asInstanceOf[Variable[Any]], bindingMut2, code"null") :: variables
+          varSavers = varSavers + (lb.bound -> bindingMut2)
+        }
+
+        val bindingMutFinal2 = bindingMut2
 
         val met1 = createCode(lb.value)
-        val met2 = code"""$bindingMut2 := ($returnValue!);  $pos := ($pos!) + 1; ()"""
-        val met3 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMut2!).asInstanceOf[v]")
+        val met2 = code"""$bindingMutFinal2 := ($returnValue!);  $pos := ($pos!) + 1; ()"""
+        val met3 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMutFinal2!).asInstanceOf[v]")
 
         code"""$met1 ::: List(() => $met2) ::: $met3"""
       }
