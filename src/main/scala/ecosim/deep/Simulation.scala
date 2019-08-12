@@ -6,19 +6,17 @@ import IR.Predef._
 case class Message[A,R](mtd: NonLocalMethod[A,R], arg: OpenCode[A])
 
 sealed abstract class Algo[A](implicit val tpe: CodeType[A])
-case class Forever(body: Algo[_]) extends Algo[Unit] //might not need the rest part.. but also it could be useful if we want to break
-//case class Block(body: Algo[_]) extends Algo[Unit] //is useless now i think
+case class Forever(body: Algo[_]) extends Algo[Unit]
 case class Wait(cde: OpenCode[Int]) extends Algo[Unit]
 case class CallMethod[E, R: CodeType](mtd: Method[E,R], arg: OpenCode[E])(implicit val E: CodeType[E]) extends Algo[R]
 case class CallMethodC[E, R: CodeType](mtd: OpenCode[Method[E,R]], arg: OpenCode[E])(implicit val E: CodeType[E]) extends Algo[R]
 case class Send[E,R:CodeType](actorRef: OpenCode[runtime.Actor], msg: Message[E,R])(implicit val E: CodeType[E]) extends Algo[R]
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
-//case class LetBinding[V: CodeType, A: CodeType](bound: Variable[V], value: OpenCode[V], rest: Algo[A]) extends Algo[A]
 /***
   * used for both bindings and sequences of Algos
   */
-case class LetBinding2[V: CodeType, A: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
+case class LetBinding[V: CodeType, A: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
 
 sealed abstract class Method[A,R] {
   val sym: IR.MtdSymbol

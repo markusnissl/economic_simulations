@@ -8,48 +8,51 @@ import IR.Predef.base.MethodApplication
 import ecosim.runtime.Actor
 
 class Lifter {
-  def apply(startClasses: List[Clasz[_]]) = {
+  def liftActor[C <: ecosim.runtime.Actor](clasz: Clasz[C])= {
+      var endStates: List[State[_]] = List()
+      //TODO check if this works well, seems like theres something wrong with the type of created states
+      clasz.fields.foreach(field => {
+        //TODO ask if this is a correct way to instantiate a state symbol, also goes for method symbols later in the code
+        endStates = State(IR.MtdSymbol(field.symbol), field.init) :: endStates
+      })
+      var endMethods: List[Method[_, _]] = List()
+      var mainAlgo: Algo[Unit] = Forever(ScalaCode(code"()"))
+      clasz.methods.map(method => {
+        val cde = method.body
+        //TODO: give a better way to label the main loop method
+        if (method.symbol.asMethodSymbol.name.toString() == "loop") {
+          val algo = liftCode(cde)
+          //TODO: fix this, the check doesn't work
+          if (algo.isInstanceOf[Algo[Unit]])
+            mainAlgo = liftCode(cde).asInstanceOf[Algo[Unit]]
+          //TODO: else, throw an exception? or make it so that main in deep.Simulation can be of type Algo[Any]
+        } else {
+          val mtdBody = liftCode(cde)
+          val params = method.vparams.flatten
+          //TODO fix the input parameters of the method body
+          endMethods = LocalMethod(IR.MtdSymbol(method.symbol), (variable1: Variable[Int]) => mtdBody ):: endMethods
+        }
+      })
+      ActorType[C](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[C]])
+  }
+
+  def liftInitCode(clasz: Clasz[_]): OpenCode[List[Actor]] = {
+    val initCode = clasz.methods.head.body
+    //TODO fix this, the check doesn't work
+    if (initCode.isInstanceOf[OpenCode[List[Actor]]])
+      initCode.asInstanceOf[OpenCode[List[Actor]]]
+    //TODO else throw an exception?
+    else {
+      code"List[Actor]()"
+    }
+  }
+
+  def apply(startClasses: List[Clasz[_ <: Actor]], mainClass: Clasz[_]) {
     var endTypes: List[ActorType[_]] = List()
-    var actorsInit: OpenCode[List[Actor]] = code"List()"
-    startClasses.foreach((clasz: Clasz[_]) => {
-      if (clasz.name == "MainClass") { //actors initialization code
-        val initCode = clasz.methods.head.body
-        //TODO fix this, the check doesn't work
-        if (initCode.isInstanceOf[OpenCode[List[Actor]]])
-          actorsInit = initCode.asInstanceOf[OpenCode[List[Actor]]]
-      }
-        //TODO: else, throw an exception?
-      else{  //ActorType initialization
-        var endStates: List[State[_]] = List()
-        //TODO check if this works well, seems like theres something wrong with the type of created states
-        clasz.fields.foreach(field => {
-          endStates = State(IR.MtdSymbol(field.symbol), field.init) :: endStates
-          //endStates = State(IR.methodSymbol[Actor1](field.symbol.asMethodSymbol.name.toString), field.init) :: endStates
-        })
-        var endMethods: List[Method[_, _]] = List()
-        var mainAlgo: Algo[Unit] = Forever(ScalaCode(code"()"))
-        clasz.methods.map(method => {
-          val cde = method.body
-          //TODO: give a better way to label the main loop method
-          if (method.symbol.asMethodSymbol.name.toString() == "loop") {
-            val algo = liftCode(cde)
-            //TODO: fix this, the check doesn't work
-            if (algo.isInstanceOf[Algo[Unit]])
-              mainAlgo = liftCode(cde).asInstanceOf[Algo[Unit]]
-            println(algo)
-            //TODO: else, throw an exception? or make it so that main in deep.Simulation can be of type Algo[Any]
-          } else {
-            println(liftCode(cde))
-            //TODO: make it recognize the type of method and make the body of method viable, maybe liftCode should also return a variable/tuple of variables?
-            endMethods = LocalMethod(ecosim.deep.IR.methodSymbol[Actor1](method.symbol.asMethodSymbol.name.toString), (variable1: Variable[Int]) => ScalaCode(code"""println("test")""")) :: endMethods
-          }
-        })
-        //TODO: fix the type param of ActorType.. why doesnt this work?
-        //      val a: clasz.C.Typ = new Actor1()
-        //      println(a)
-        endTypes = ActorType[Actor1](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[Actor1]]) :: endTypes
-      }
-    })
+    var actorsInit: OpenCode[List[Actor]] = liftInitCode(mainClass)
+    endTypes = startClasses.map(c => {
+      liftActor(c)
+    }).foldRight(endTypes)((a, endTypes) => a :: endTypes)
     ecosim.deep.Simulation(endTypes, actorsInit)
   }
 
@@ -57,9 +60,9 @@ class Lifter {
 //    base.debugFor(
     cde match {
       case code"val $x: $xt = $v; $rest: T" =>
-        LetBinding2(Some(x), ScalaCode(v), liftCode(rest))
+        LetBinding(Some(x), ScalaCode(v), liftCode(rest))
       case code"$e; $rest: T" =>
-        LetBinding2(None, liftCode(e), liftCode(rest))
+        LetBinding(None, liftCode(e), liftCode(rest))
       case code"($x: List[$tb]).foreach[$ta](($y: tb) => $foreachbody)" =>
         val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()"))
         f.asInstanceOf[Algo[T]]
@@ -91,9 +94,12 @@ class Lifter {
 object App1 extends App {
   //TODO: ask how to know which subtype of Clasz to use, and how to find all of the annotaded classes
   val cls1: ClassWithObject[Actor1] = Actor1.reflect(IR)
-  val cls2: ClassWithObject[MainClass] = MainClass.reflect(IR)
+  val cls2: ClassWithObject[Actor2] = Actor2.reflect(IR)
+  val cls3: ClassWithObject[MainClass] = MainClass.reflect(IR)
+  val startClasses: List[Clasz[_ <: Actor]] = List(cls1, cls2)
+  val mainClass = cls3
   val lifter = new Lifter()
-  val simu = lifter(List(cls1, cls2))
+  val simu = lifter(startClasses, mainClass)
 //  val m = cls1.methods.head
 //  lifter.liftCode(m.body.asInstanceOf[OpenCode[Any]])
 //  val cde1 = m.body
