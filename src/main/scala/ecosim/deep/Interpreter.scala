@@ -19,23 +19,8 @@ object Interpreter {
   }
 
   def apply[A: CodeType](algo: Algo[A], ass: mutable.ListBuffer[Assignment[_]], methodMapping:Map[IR.MtdSymbol, (Int,Variable[_])], methodIdMapping: Map[Int, IR.MtdSymbol]): Instruction = algo match {
-    case Forever(bdy@_*) => {
-      var l = List[Instruction]()
-
-      for (el <- bdy) {
-        l = apply(el, ass, methodMapping, methodIdMapping) :: l
-      }
-
-      __forever(l.reverse: _*)
-    }
-    case Block(bdy@_*) => {
-      var l = List[Instruction]()
-
-      for (el <- bdy) {
-        l = apply(el, ass, methodMapping, methodIdMapping) :: l
-      }
-
-      __doblock(l.reverse: _*)
+    case Forever(bdy) => {
+      __forever(apply(bdy, ass, methodMapping, methodIdMapping))
     }
     case Wait(cde) => {
       __wait(bindAll(ass.toList, cde).evalClosed)
@@ -129,8 +114,8 @@ object Interpreter {
       import fe.E
 
       var iter:Iterator[b] = null
-      val v = Variable[b]
-      val al: Algo[A] = fe.f(v)
+      val v = fe.variable
+      val al: Algo[A] = fe.f
 
 
       var command = __doblock(
@@ -157,74 +142,47 @@ object Interpreter {
         bindAll(ass.toList, cde).evalClosed
       }
     }
-    case LetBinding(bound, value, body) => {
-      var valueInter: Any = null
 
-      var oldAssOption:Option[Assignment[_]] = None
+    case lb: LetBinding[A, c] => {
 
-      val algo1 = __do {
-        oldAssOption = ass.find(x => x.v == bound)
-        valueInter = bindAll(ass.toList, value).evalClosed
-        if (oldAssOption.isDefined) {
-          val index = ass.indexWhere(_.v == bound)
-          ass.update(index, new Assignment(bound, valueInter))
-        } else {
-          ass.prepend(new Assignment(bound, valueInter))
-        }
+      if (lb.bound.isEmpty) {
+        __doblock(apply(lb.value, ass, methodMapping, methodIdMapping), apply(lb.rest, ass, methodMapping,methodIdMapping))
+      } else {
+        var valueInter: Any = null
+        var oldAssOption: Option[Assignment[_]] = None
+
+        val algo1 = __doblock(
+          __do {
+            oldAssOption = ass.find(x => x.v == lb.bound.get)
+          },
+          apply(lb.value, ass, methodMapping, methodIdMapping),
+          __doResult { result: Any =>
+            valueInter = result
+
+            if (oldAssOption.isDefined) {
+              val index = ass.indexWhere(_.v == lb.bound.get)
+              ass.update(index, new Assignment(lb.bound.get, valueInter.asInstanceOf[A]))
+            } else {
+              ass.prepend(new Assignment(lb.bound.get, valueInter.asInstanceOf[A]))
+            }
+          }
+        )
+
+        var algo2: Instruction = __doblock(
+          __if(oldAssOption.isDefined)(
+            apply(lb.rest, ass, methodMapping, methodIdMapping)
+          ),
+          __if(!oldAssOption.isDefined)(
+            apply(lb.rest, ass, methodMapping, methodIdMapping),
+            __do {
+              // Remove added element again
+              ass.remove(0)
+            }
+          )
+        )
+
+        __doblock(algo1, algo2)
       }
-
-      var algo2: Instruction = __doblock(
-        __if(oldAssOption.isDefined)(
-          apply(body, ass, methodMapping, methodIdMapping)
-        ),
-        __if(!oldAssOption.isDefined)(
-          apply(body, ass, methodMapping, methodIdMapping),
-          __do {
-            // Remove added element again
-            ass.remove(0)
-          }
-        )
-      )
-
-      __doblock(algo1, algo2)
-    }
-
-    case lb2: LetBinding2[A, c] => {
-
-      var valueInter: Any = null
-      var oldAssOption:Option[Assignment[_]] = None
-
-      val algo1 = __doblock(
-        __do{
-          oldAssOption = ass.find(x => x.v == lb2.bound)
-        },
-        apply(lb2.value, ass, methodMapping, methodIdMapping),
-        __doResult { result: Any =>
-          valueInter = result
-
-          if (oldAssOption.isDefined) {
-            val index = ass.indexWhere(_.v == lb2.bound)
-            ass.update(index, new Assignment(lb2.bound, valueInter.asInstanceOf[A]))
-          } else {
-            ass.prepend(new Assignment(lb2.bound, valueInter.asInstanceOf[A]))
-          }
-        }
-      )
-
-      var algo2: Instruction = __doblock(
-        __if(oldAssOption.isDefined)(
-          apply(lb2.body, ass,methodMapping, methodIdMapping)
-        ),
-        __if(!oldAssOption.isDefined)(
-          apply(lb2.body, ass,methodMapping, methodIdMapping),
-          __do {
-            // Remove added element again
-            ass.remove(0)
-          }
-        )
-      )
-
-      __doblock(algo1, algo2)
     }
   }
 
