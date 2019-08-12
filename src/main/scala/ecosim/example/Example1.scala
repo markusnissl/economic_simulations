@@ -58,7 +58,7 @@ object ManualEmbedding extends App {
 
   val handleMessage = Foreach(
     code"$marketSelf.getRequestMessages",
-    (p: Variable[_root_.Simulation.RequestMessageInter[Any, Unit]]) => LetBinding2(
+    (p: Variable[_root_.Simulation.RequestMessageInter[Any, Unit]]) => LetBinding(
       resultMessageCall,
       CallMethodC[Any, Any](code"$p.methodId", code"$p.arg"),
       ScalaCode(code"""$p.reply($marketSelf, $resultMessageCall)""")
@@ -70,10 +70,10 @@ object ManualEmbedding extends App {
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
     marketSell :: marketSellB :: Nil,
-    LetBinding(bindingTest, code"0",
+    LetBinding(bindingTest, ScalaCode[Int](code"0"),
       Forever(
         handleMessage,
-        LetBinding(bindingTest, code"$bindingTest + 1", ScalaCode(code"""println("Binding test:",$bindingTest)""")),
+        LetBinding(bindingTest, ScalaCode[Int](code"$bindingTest + 1"), ScalaCode(code"""println("Binding test:",$bindingTest)""")),
         CallMethod[Int, Int](marketSell.sym, code"10"),
         Wait(code"1")
       )
@@ -97,7 +97,7 @@ object ManualEmbedding extends App {
         )
     ) :: Nil,
     Forever(
-      LetBinding2[Int, Unit](testResult, Send[Int, Int](code"$farmerSelf", code"$farmerSelf.market", Message(marketSellB, code"500")), ScalaCode(code"""println("TEST_VAR",$testResult)""")),
+      LetBinding[Int, Unit](testResult, Send[Int, Int](code"$farmerSelf", code"$farmerSelf.market", Message(marketSellB, code"500")), ScalaCode(code"""println("TEST_VAR",$testResult)""")),
       Wait(code"1")
     ),
     farmerSelf)
@@ -135,9 +135,9 @@ object ManualEmbedding extends App {
       Foreach(code"List(1,2,3)", (p: Variable[Int]) => ScalaCode(code"println($p)")),
       CallMethod[Int, Unit](marketSell.sym, code"1000"),
       Wait(code"1"),
-      LetBinding(testResult, code"42", ScalaCode(code"println($testResult)")),
-      LetBinding2(testResult, ScalaCode[Int](code"11"), ScalaCode(code"println($testResult)")),
-      LetBinding2(testResult, CallMethod[Int, Int](marketSellB.sym, code"422"), ScalaCode(code"println($testResult)"))
+      LetBinding(testResult, ScalaCode[Int](code"42"), ScalaCode(code"println($testResult)")),
+      LetBinding(testResult, ScalaCode[Int](code"11"), ScalaCode(code"println($testResult)")),
+      LetBinding(testResult, CallMethod[Int, Int](marketSellB.sym, code"422"), ScalaCode(code"println($testResult)"))
     ),
     simpleSimSelf
   )

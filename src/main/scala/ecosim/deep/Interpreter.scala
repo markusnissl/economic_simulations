@@ -28,15 +28,15 @@ object Interpreter {
 
       __forever(l.reverse: _*)
     }
-    case Block(bdy@_*) => {
-      var l = List[Instruction]()
-
-      for (el <- bdy) {
-        l = apply(el, ass, methodMapping, methodIdMapping) :: l
-      }
-
-      __doblock(l.reverse: _*)
-    }
+//    case Block(bdy@_*) => {
+//      var l = List[Instruction]()
+//
+//      for (el <- bdy) {
+//        l = apply(el, ass, methodMapping, methodIdMapping) :: l
+//      }
+//
+//      __doblock(l.reverse: _*)
+//    }
     case Wait(cde) => {
       __wait(bindAll(ass.toList, cde).evalClosed)
     }
@@ -157,66 +157,66 @@ object Interpreter {
         bindAll(ass.toList, cde).evalClosed
       }
     }
-    case LetBinding(bound, value, body) => {
-      var valueInter: Any = null
+//    case LetBinding(bound, value, body) => {
+//      var valueInter: Any = null
+//
+//      var oldAssOption:Option[Assignment[_]] = None
+//
+//      val algo1 = __do {
+//        oldAssOption = ass.find(x => x.v == bound)
+//        valueInter = bindAll(ass.toList, value).evalClosed
+//        if (oldAssOption.isDefined) {
+//          val index = ass.indexWhere(_.v == bound)
+//          ass.update(index, new Assignment(bound, valueInter))
+//        } else {
+//          ass.prepend(new Assignment(bound, valueInter))
+//        }
+//      }
+//
+//      var algo2: Instruction = __doblock(
+//        __if(oldAssOption.isDefined)(
+//          apply(body, ass, methodMapping, methodIdMapping)
+//        ),
+//        __if(!oldAssOption.isDefined)(
+//          apply(body, ass, methodMapping, methodIdMapping),
+//          __do {
+//            // Remove added element again
+//            ass.remove(0)
+//          }
+//        )
+//      )
+//
+//      __doblock(algo1, algo2)
+//    }
 
-      var oldAssOption:Option[Assignment[_]] = None
-
-      val algo1 = __do {
-        oldAssOption = ass.find(x => x.v == bound)
-        valueInter = bindAll(ass.toList, value).evalClosed
-        if (oldAssOption.isDefined) {
-          val index = ass.indexWhere(_.v == bound)
-          ass.update(index, new Assignment(bound, valueInter))
-        } else {
-          ass.prepend(new Assignment(bound, valueInter))
-        }
-      }
-
-      var algo2: Instruction = __doblock(
-        __if(oldAssOption.isDefined)(
-          apply(body, ass, methodMapping, methodIdMapping)
-        ),
-        __if(!oldAssOption.isDefined)(
-          apply(body, ass, methodMapping, methodIdMapping),
-          __do {
-            // Remove added element again
-            ass.remove(0)
-          }
-        )
-      )
-
-      __doblock(algo1, algo2)
-    }
-
-    case lb2: LetBinding2[A, c] => {
+    case lb: LetBinding[A, c] => {
 
       var valueInter: Any = null
       var oldAssOption:Option[Assignment[_]] = None
 
       val algo1 = __doblock(
         __do{
-          oldAssOption = ass.find(x => x.v == lb2.bound)
+          oldAssOption = ass.find(x => x.v == lb.bound)
         },
-        apply(lb2.value, ass, methodMapping, methodIdMapping),
+        apply(lb.value, ass, methodMapping, methodIdMapping),
         __doResult { result: Any =>
           valueInter = result
 
           if (oldAssOption.isDefined) {
-            val index = ass.indexWhere(_.v == lb2.bound)
-            ass.update(index, new Assignment(lb2.bound, valueInter.asInstanceOf[A]))
+            val index = ass.indexWhere(_.v == lb.bound)
+            ass.update(index, new Assignment(lb.bound, valueInter.asInstanceOf[A]))
           } else {
-            ass.prepend(new Assignment(lb2.bound, valueInter.asInstanceOf[A]))
+            ass.prepend(new Assignment(lb.bound, valueInter.asInstanceOf[A]))
           }
         }
       )
 
       var algo2: Instruction = __doblock(
         __if(oldAssOption.isDefined)(
-          apply(lb2.body, ass,methodMapping, methodIdMapping)
+          apply(lb.body, ass,methodMapping, methodIdMapping)
         ),
         __if(!oldAssOption.isDefined)(
-          apply(lb2.body, ass,methodMapping, methodIdMapping),
+          apply(lb.body, ass,methodMapping, methodIdMapping),
           __do {
             // Remove added element again
             ass.remove(0)

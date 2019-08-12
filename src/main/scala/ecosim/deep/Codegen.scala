@@ -113,24 +113,24 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         val f2: OpenCode[Unit] = code"""$pos := ((($posSafer!).head) - 1); $posSafer := ($posSafer!).tail; ()"""
         val a = code"""List[() => Unit](() => $f1)"""
         val x = createCode(bdy.head)
-        val y = createCode(Block(bdy.tail: _*))
+//        val y = createCode(Block(bdy.tail: _*))
         val e = code"""List[() => Unit](() => $f2)"""
 
-        val result = code"$a ::: $x ::: $y ::: $e"
+        val result = code"$a ::: $x ::: $e"
         result
       }
-      case Block(bdy@_*) => {
-        if (bdy.isEmpty) {
-          code"Nil"
-        } else {
-          val listVar = Variable[MutVar[List[Any]]]
-
-          val x = createCode(bdy.head)
-          val y = createCode(Block(bdy.tail: _*))
-
-          code"$x ::: $y"
-        }
-      }
+//      case Block(bdy@_*) => {
+//        if (bdy.isEmpty) {
+//          code"Nil"
+//        } else {
+//          val listVar = Variable[MutVar[List[Any]]]
+//
+//          val x = createCode(bdy.head)
+//          val y = createCode(Block(bdy.tail: _*))
+//
+//          code"$x ::: $y"
+//        }
+//      }
       case sc: ScalaCode[a] => {
         import sc.tpe
 
@@ -227,33 +227,33 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         val mut2 = mut1.subs(listVal)~>(code"($listValMut!).asInstanceOf[b]")
         mut2
       }
+//      case lb: LetBinding[v, a] => {
+//        import lb.V
+//
+//        var bindingMut = Variable[MutVar[Any]]
+//
+//        var contained = false
+//        if (varSavers.contains(lb.bound)) {
+//          bindingMut = varSavers(lb.bound)
+//          contained = true
+//        } else {
+//          variables = VarWrapper(lb.bound.asInstanceOf[Variable[Any]], bindingMut, code"null") :: variables
+//          varSavers = varSavers + (lb.bound -> bindingMut)
+//        }
+//
+//        val bindingMutFinal = bindingMut
+//
+//        val met: OpenCode[Unit] = code"""$bindingMutFinal := ${lb.value}; ()"""
+//        val met2 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMutFinal!).asInstanceOf[v]")
+//
+//        if (!contained) {
+//          varSavers = varSavers.filter(_._1 != lb.bound)
+//        }
+//
+//
+//        code"""List(() => $met) ::: $met2"""
+//      }
       case lb: LetBinding[v, a] => {
-        import lb.V
-
-        var bindingMut = Variable[MutVar[Any]]
-
-        var contained = false
-        if (varSavers.contains(lb.bound)) {
-          bindingMut = varSavers(lb.bound)
-          contained = true
-        } else {
-          variables = VarWrapper(lb.bound.asInstanceOf[Variable[Any]], bindingMut, code"null") :: variables
-          varSavers = varSavers + (lb.bound -> bindingMut)
-        }
-
-        val bindingMutFinal = bindingMut
-
-        val met: OpenCode[Unit] = code"""$bindingMutFinal := ${lb.value}; ()"""
-        val met2 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMutFinal!).asInstanceOf[v]")
-
-        if (!contained) {
-          varSavers = varSavers.filter(_._1 != lb.bound)
-        }
-
-
-        code"""List(() => $met) ::: $met2"""
-      }
-      case lb: LetBinding2[v, a] => {
         import lb.V
 
         var bindingMut2 = Variable[MutVar[Any]]
