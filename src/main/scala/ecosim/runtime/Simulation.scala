@@ -22,6 +22,7 @@ class Actor extends SimO {
 
   var stepFunction: (Int, Int, Int) => (Int, Int) = null
   var useStepFunction = false
+
   //Override with compiled function, has to be set before
   override def run_until(until: T) = {
     if (useStepFunction) {

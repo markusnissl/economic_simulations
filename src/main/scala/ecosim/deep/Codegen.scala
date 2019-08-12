@@ -38,7 +38,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
     val methodArgs = Variable[A];
     val methodArgsMut = Variable[MutVar[Any]];
     val methodAlgo = method.body(methodArgs)
-    val f1 = code"$pos := ($posSafer!).head; $posSafer := ($posSafer!).tail; ()"
+    val f1 = code"$pos := ((($posSafer!).head) - 1); $posSafer := ($posSafer!).tail; ()"
     variables = VarWrapper(methodArgs.asInstanceOf[Variable[Any]], methodArgsMut, code"null") :: variables
     (code"""${this.createCode(methodAlgo).subs(methodArgs).~>(code"($methodArgsMut!).asInstanceOf[A]")} ::: List[() => Unit](() => $f1)""", methodArgsMut, methodIdMapping.map(_.swap).get(method.sym).get)
   }
@@ -94,6 +94,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
             while (($timer!) <= endTime && ($pos!) < commandLength) {
               val command = $commands(($pos!))
               command()
+              $pos := ($pos!) + 1
             }
 
             (($pos!),($timer!))
@@ -108,8 +109,8 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
       case Forever(bdy@_*) => {
         val listVar = Variable[MutVar[List[Any]]]
 
-        val f1: OpenCode[Unit] = code"""$posSafer := ($pos!) :: ($posSafer!); $pos := ($pos!) + 1; ()"""
-        val f2: OpenCode[Unit] = code"""$pos := ($posSafer!).head; $posSafer := ($posSafer!).tail; ()"""
+        val f1: OpenCode[Unit] = code"""$posSafer := ($pos!) :: ($posSafer!); ()"""
+        val f2: OpenCode[Unit] = code"""$pos := ((($posSafer!).head) - 1); $posSafer := ($posSafer!).tail; ()"""
         val a = code"""List[() => Unit](() => $f1)"""
         val x = createCode(bdy.head)
         val y = createCode(Block(bdy.tail: _*))
@@ -134,12 +135,12 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         import sc.tpe
 
         val tmp = code"() => ${sc.cde}"
-        val met: OpenCode[Unit] = code"""$pos := ($pos!) + 1; $returnValue := $tmp(); ()"""
+        val met: OpenCode[Unit] = code"""$returnValue := $tmp(); ()"""
 
         code"""List(() => $met)"""
       }
       case Wait(cde) => {
-        val met: OpenCode[Unit] = code"$pos := ($pos!) + 1; $timer := ($timer!) + $cde; ()"
+        val met: OpenCode[Unit] = code"$timer := ($timer!) + $cde; ()"
 
         code"""List(() => $met)"""
       }
@@ -155,7 +156,6 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
 
         val f1: OpenCode[Unit] =
           code"""
-                   $pos := ($pos!) + 1;
                     val sender = ${send.actorFrom};
                     val receiver = ${send.actorRef};
                     val arg = ${send.msg.arg};
@@ -169,14 +169,12 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
               """
         val f2: OpenCode[Unit] =
           code"""
-                        $pos := ($pos!) + 1;
                         $timer := ($timer!) + 1;
                         ()
                       """
-        val f3: OpenCode[Unit] = code"""$pos := ($pos!) + 1; if(($responseMessage!) == null) {$pos := ($pos!) - 2;}; ()"""
+        val f3: OpenCode[Unit] = code"""if(($responseMessage!) == null) {$pos := (($pos!) - 2);}; ()"""
 
         val f4: OpenCode[Unit] =code"""
-                       $pos := ($pos!) + 1;
                        $returnValue := ($responseMessage!).arg;
                        $responseMessage := null;
                        ()"""
@@ -193,7 +191,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         // 1. Push next position on stack
         // 2. Set Parameters
         // 2. Jump to position where method is located
-        val f1: OpenCode[Unit] = code""" $pos := ($pos!) + 1; $posSafer := ($pos!) :: ($posSafer!); $methodVariableTableVar!($methodId) :=  $arg; $pos := $methodLookupTableVar!($methodId); ()"""
+        val f1: OpenCode[Unit] = code"""$posSafer := (($pos!) + 1) :: ($posSafer!); $methodVariableTableVar!($methodId) :=  $arg; $pos := (($methodLookupTableVar!($methodId)) - 1); ()"""
         // 3. Method will return to position pushed on stack and contain returnValue
         // 4. TODO for later: store and restore variables + dependency analysis to restore only needed ones
         code"""List(() => $f1)"""
@@ -204,7 +202,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         // 2. Set Parameters
         // 3. Jump to position where method is located
         val methodId = Const(methodIdMapping.map(_.swap).get(sym).get)
-        val f1: OpenCode[Unit] = code""" $pos := ($pos!) + 1; $posSafer := ($pos!) :: ($posSafer!); $methodVariableTableVar!($methodId) :=  $arg; $pos := $methodLookupTableVar!($methodId); ()"""
+        val f1: OpenCode[Unit] = code"""$posSafer := (($pos!) + 1) :: ($posSafer!); $methodVariableTableVar!($methodId) :=  $arg; $pos := (($methodLookupTableVar!($methodId)) - 1); ()"""
         // 3. Method will return to position pushed on stack and contain returnValue
         // 4. TODO for later: store and restore variables + dependency analysis to restore only needed ones
         code"""List(() => $f1)"""
@@ -219,10 +217,10 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         variables = VarWrapper(iter.asInstanceOf[Variable[Any]], iterMut, code"null") :: variables
         variables = VarWrapper(listVal.asInstanceOf[Variable[Any]], listValMut, code"null") :: variables
 
-        val f1 = code"""$pos := ($pos!) + 1; $iterMut := ${fe.ls}.iterator; ()"""
-        val reset = code"""$pos := ($posSafer!).head; $posSafer := ($posSafer!).tail; ()"""
+        val f1 = code"""$iterMut := ${fe.ls}.iterator; ()"""
+        val reset = code"""$pos := ((($posSafer!).head) - 1); $posSafer := ($posSafer!).tail; ()"""
         val f3 = code"""${createCode(fe.f(listVal))} ::: List[() => Unit](() => $reset)"""
-        val f2 = code"""if($iter.hasNext) {$posSafer := ($pos!) :: ($posSafer!); $listValMut := $iter.next; $pos := ($pos!) + 1;} else {$pos := ($pos!) + 1 + $f3.length;}"""
+        val f2 = code"""if($iter.hasNext) {$posSafer := ($pos!) :: ($posSafer!); $listValMut := $iter.next;} else {$pos := ($pos!) + $f3.length;}"""
 
         val finalCode = code"""List(() => $f1, () => $f2) ::: $f3"""
         val mut1 = finalCode.subs(iter)~>(code"($iterMut!).asInstanceOf[Iterator[Any]]")
@@ -245,7 +243,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
 
         val bindingMutFinal = bindingMut
 
-        val met: OpenCode[Unit] = code"""$bindingMutFinal := ${lb.value};  $pos := ($pos!) + 1; ()"""
+        val met: OpenCode[Unit] = code"""$bindingMutFinal := ${lb.value}; ()"""
         val met2 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMutFinal!).asInstanceOf[v]")
 
         if (!contained) {
@@ -272,7 +270,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         val bindingMutFinal2 = bindingMut2
 
         val met1 = createCode(lb.value)
-        val met2 = code"""$bindingMutFinal2 := ($returnValue!);  $pos := ($pos!) + 1; ()"""
+        val met2 = code"""$bindingMutFinal2 := ($returnValue!); ()"""
         val met3 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMutFinal2!).asInstanceOf[v]")
 
         code"""$met1 ::: List(() => $met2) ::: $met3"""
