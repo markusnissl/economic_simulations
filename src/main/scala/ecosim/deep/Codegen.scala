@@ -106,31 +106,18 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
 
   def createCode(algo: Algo[_]): OpenCode[List[() => Unit]] = {
     algo match {
-      case Forever(bdy@_*) => {
+      case Forever(bdy) => {
         val listVar = Variable[MutVar[List[Any]]]
 
         val f1: OpenCode[Unit] = code"""$posSafer := ($pos!) :: ($posSafer!); ()"""
         val f2: OpenCode[Unit] = code"""$pos := ((($posSafer!).head) - 1); $posSafer := ($posSafer!).tail; ()"""
         val a = code"""List[() => Unit](() => $f1)"""
-        val x = createCode(bdy.head)
-//        val y = createCode(Block(bdy.tail: _*))
+        val x = createCode(bdy)
         val e = code"""List[() => Unit](() => $f2)"""
 
         val result = code"$a ::: $x ::: $e"
         result
       }
-//      case Block(bdy@_*) => {
-//        if (bdy.isEmpty) {
-//          code"Nil"
-//        } else {
-//          val listVar = Variable[MutVar[List[Any]]]
-//
-//          val x = createCode(bdy.head)
-//          val y = createCode(Block(bdy.tail: _*))
-//
-//          code"$x ::: $y"
-//        }
-//      }
       case sc: ScalaCode[a] => {
         import sc.tpe
 
@@ -211,69 +198,49 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         import fe.E
         val iter = Variable[Iterator[Any]]
         val iterMut = Variable[MutVar[Any]]
-        val listVal = Variable[b]
         val listValMut = Variable[MutVar[Any]]
 
         variables = VarWrapper(iter.asInstanceOf[Variable[Any]], iterMut, code"null") :: variables
-        variables = VarWrapper(listVal.asInstanceOf[Variable[Any]], listValMut, code"null") :: variables
+        variables = VarWrapper(fe.variable.asInstanceOf[Variable[Any]], listValMut, code"null") :: variables
 
         val f1 = code"""$iterMut := ${fe.ls}.iterator; ()"""
         val reset = code"""$pos := ((($posSafer!).head) - 1); $posSafer := ($posSafer!).tail; ()"""
-        val f3 = code"""${createCode(fe.f(listVal))} ::: List[() => Unit](() => $reset)"""
+        val f3 = code"""${createCode(fe.f)} ::: List[() => Unit](() => $reset)"""
         val f2 = code"""if($iter.hasNext) {$posSafer := ($pos!) :: ($posSafer!); $listValMut := $iter.next;} else {$pos := ($pos!) + $f3.length;}"""
 
         val finalCode = code"""List(() => $f1, () => $f2) ::: $f3"""
         val mut1 = finalCode.subs(iter)~>(code"($iterMut!).asInstanceOf[Iterator[Any]]")
-        val mut2 = mut1.subs(listVal)~>(code"($listValMut!).asInstanceOf[b]")
+        val mut2 = mut1.subs(fe.variable)~>(code"($listValMut!).asInstanceOf[b]")
         mut2
       }
-//      case lb: LetBinding[v, a] => {
-//        import lb.V
-//
-//        var bindingMut = Variable[MutVar[Any]]
-//
-//        var contained = false
-//        if (varSavers.contains(lb.bound)) {
-//          bindingMut = varSavers(lb.bound)
-//          contained = true
-//        } else {
-//          variables = VarWrapper(lb.bound.asInstanceOf[Variable[Any]], bindingMut, code"null") :: variables
-//          varSavers = varSavers + (lb.bound -> bindingMut)
-//        }
-//
-//        val bindingMutFinal = bindingMut
-//
-//        val met: OpenCode[Unit] = code"""$bindingMutFinal := ${lb.value}; ()"""
-//        val met2 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMutFinal!).asInstanceOf[v]")
-//
-//        if (!contained) {
-//          varSavers = varSavers.filter(_._1 != lb.bound)
-//        }
-//
-//
-//        code"""List(() => $met) ::: $met2"""
-//      }
       case lb: LetBinding[v, a] => {
         import lb.V
 
-        var bindingMut2 = Variable[MutVar[Any]]
-        var contained = false
-
-        if (varSavers.contains(lb.bound)) {
-          bindingMut2 = varSavers(lb.bound)
-          contained = true
+        if (lb.bound.isEmpty) {
+          val met1 = createCode(lb.value)
+          val met2 = createCode(lb.rest)
+          code"$met1 ::: $met2"
         } else {
-          variables = VarWrapper(lb.bound.asInstanceOf[Variable[Any]], bindingMut2, code"null") :: variables
-          varSavers = varSavers + (lb.bound -> bindingMut2)
+          var bindingMut2 = Variable[MutVar[Any]]
+          var contained = false
+
+          if (varSavers.contains(lb.bound.get)) {
+            bindingMut2 = varSavers(lb.bound.get)
+            contained = true
+          } else {
+            variables = VarWrapper(lb.bound.get.asInstanceOf[Variable[Any]], bindingMut2, code"null") :: variables
+            varSavers = varSavers + (lb.bound.get -> bindingMut2)
+          }
+
+          val bindingMutFinal2 = bindingMut2
+
+          val met1 = createCode(lb.value)
+          val met2 = code"""$bindingMutFinal2 := ($returnValue!); ()"""
+          val bound = lb.bound.get
+          val met3 = createCode(lb.rest).subs(bound).~>(code"($bindingMutFinal2!).asInstanceOf[v]")
+
+          code"""$met1 ::: List(() => $met2) ::: $met3"""
         }
-
-        val bindingMutFinal2 = bindingMut2
-
-        val met1 = createCode(lb.value)
-        val met2 = code"""$bindingMutFinal2 := ($returnValue!); ()"""
-        val met3 = createCode(lb.body).subs(lb.bound).~>(code"($bindingMutFinal2!).asInstanceOf[v]")
-
-        code"""$met1 ::: List(() => $met2) ::: $met3"""
       }
     }
   }
