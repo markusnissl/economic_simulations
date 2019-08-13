@@ -24,6 +24,8 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
   var methodLookupTable: OpenCode[Map[Int, Int]] = code"Map[Int, Int]()"
   var methodVariableTable: OpenCode[Map[Int, MutVar[Any]]] = code"Map[Int, MutVar[Any]]()"
   var methodVariableTableVar = Variable[MutVar[Map[Int, MutVar[Any]]]]
+  var methodVariableTableStack: OpenCode[Map[Int, MutVar[List[Any]]]] = code"Map[Int, MutVar[List[Any]]]()"
+  var methodVariableTableVarStack = Variable[MutVar[Map[Int, MutVar[List[Any]]]]]
 
   var variables: List[VarWrapper[_]] = List()
 
@@ -57,6 +59,14 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
     case Nil => code"Map[Int, MutVar[Any]]()"
   }
 
+  def generateVariableTableStack(data: List[(OpenCode[List[() => Unit]], Variable[MutVar[Any]], Int)]): OpenCode[Map[Int, MutVar[List[Any]]]] = data match {
+    case (x :: xs) => {
+      val entry = code"Map(${Const(x._3)} -> MutVar(List[Any]()))"
+      code"""$entry ++ $${generateVariableTableStack(xs)}"""
+    }
+    case Nil => code"Map[Int, MutVar[List[Any]]]()"
+  }
+
   //This is not supported :(
   //var testMethMap:ClosedCode[Map[Int, Variable[MutVar[_]]]] = code"Map[Int,Variable[MutVar[_]]]()"
 
@@ -87,6 +97,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
 
     methodLookupTable = generateMethodTable(methodCodes, code"$main.length")
     methodVariableTable = generateVariableTable(methodCodes.map(x => (x._1, x._2.asInstanceOf[Variable[MutVar[Any]]], x._3)))
+    methodVariableTableStack = generateVariableTableStack(methodCodes.map(x => (x._1, x._2.asInstanceOf[Variable[MutVar[Any]]], x._3)))
 
     val finalCode = this.createExec(this.actorType.self, commands)
 
@@ -106,9 +117,11 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
          val $pos = MutVar(0)
          val $methodLookupTableVar = MutVar(Map())
          val $methodVariableTableVar = MutVar(Map())
+         val $methodVariableTableVarStack = MutVar(Map())
 
          $methodLookupTableVar := $methodLookupTable
          $methodVariableTableVar := $methodVariableTable
+         $methodVariableTableVarStack := $methodVariableTableStack
 
          val commandLength = $commands.length
 
@@ -164,19 +177,12 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
     }
   }
 
-  private def mergeMerger(com: List[OpenCode[Unit]], tmp: ListBuffer[(Boolean, Boolean)]): Unit = {
-    val mFirst = merger.head
-    val mLast = merger.last
-    val onlyOne = merger.length == 1
-    merger = tmp
-    if (onlyOne) {
-      merger.append((mFirst._1,mLast._2))
-    } else {
-      merger.append((mFirst._1,false))
-      com.tail.foreach(x => merger.append((false, false)))
-      //Set last to correct end type (even though it will not be merged with f2, because it has false
-      merger.update(merger.length-1, (false, mLast._2))
-    }
+  /**
+    * Note:
+    * Not allowed to set true or false to beginning or ending, otherwise if jumps would be wrong and not working
+    */
+  private def mergeMerger(com: List[OpenCode[Unit]]): Unit = {
+    com.foreach(x => merger.append((false, false)))
   }
 
   private def createCodeLogic(algo: Algo[_]): List[OpenCode[Unit]] = {
@@ -264,23 +270,35 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
       case CallMethodC(methodId, arg) => {
         //What we have to do:
         // 1. Push next position on stack
-        // 2. Set Parameters (TODO: save prev one if recursive)
+        // 2. Set Parameters and save current params of method
         // 2. Jump to position where method is located
-        val f1: OpenCode[Unit] = code"""$posSafer := (($pos!) + 1) :: ($posSafer!); $methodVariableTableVar!($methodId) :=  $arg; $pos := (($methodLookupTableVar!($methodId)) - 1); ()"""
+        val f1: OpenCode[Unit] =
+        code"""
+          $posSafer := (($pos!) + 1) :: ($posSafer!);
+          val arg = (($methodVariableTableVar!)($methodId)!)
+          val currentList = ($methodVariableTableVarStack!).get($methodId).get!
+          val newStackVal = (arg :: currentList)
+          $methodVariableTableVarStack!($methodId) := newStackVal;
+          $methodVariableTableVar!($methodId) :=  $arg;
+          $pos := (($methodLookupTableVar!($methodId)) - 1);
+          ()
+          """
         // 3. Method will return to position pushed on stack and contain returnValue
+        // 4. Restore save variable from stack
+        val f2: OpenCode[Unit] =
+        code"""
+          val currentList = ($methodVariableTableVarStack!).get($methodId).get.!;
+          $methodVariableTableVar!($methodId) := currentList.head;
+          ($methodVariableTableVarStack!)($methodId) := currentList.tail;
+          ()
+          """
         merger.append((true, false))
-        List(f1)
+        merger.append((true, true))
+        List(f1, f2)
       }
       case CallMethod(sym, arg) => {
-        //What we have to do:
-        // 1. Push next position on stack
-        // 2. Set Parameters (TODO: save prev one if recursive)
-        // 3. Jump to position where method is located
         val methodId = Const(methodIdMapping.map(_.swap).get(sym).get)
-        val f1: OpenCode[Unit] = code"""$posSafer := (($pos!) + 1) :: ($posSafer!); $methodVariableTableVar!($methodId) :=  $arg; $pos := (($methodLookupTableVar!($methodId)) - 1); ()"""
-        // 3. Method will return to position pushed on stack and contain returnValue
-        merger.append((true, false))
-        List(f1)
+        createCodeLogic(CallMethodC(methodId, arg))
       }
       case fe: Foreach[b, _] => {
         import fe.E
@@ -307,7 +325,8 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         merger.append((true, false)) //f3_0
         val f3 = mergeCodes(f3_1, merger.toList)
 
-        mergeMerger(f3, tmp)
+        merger = tmp
+        mergeMerger(f3)
 
         val f2 = code"""if($iter.hasNext) {$posSafer := ($pos!) :: ($posSafer!); $listValMut := $iter.next;} else {$pos := ($pos!) + ${Const(f3.length)};}"""
 
@@ -358,7 +377,9 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         merger = ListBuffer()
         val met2_1 = createCodeLogic(body)
         val met2 = mergeCodes(met2_1, merger.toList)
-        mergeMerger(met2, tmp)
+
+        merger = tmp
+        mergeMerger(met2)
 
         val met1 = code"""if(!$cond) {$pos := ($pos!) + ${Const(met2.length)};}"""
 
