@@ -377,7 +377,6 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         merger = ListBuffer()
         val met2_1 = createCodeLogic(body)
         val met2 = mergeCodes(met2_1, merger.toList)
-
         merger = tmp
         mergeMerger(met2)
 

@@ -11,7 +11,7 @@ package code {
   /**
     * This class is needed as a wrapper so that value can be used as 'out' parameter for returning result
     */
-  class ReturnValue {
+  class ReturnValue extends Serializable {
     var value:Any = null
   }
 

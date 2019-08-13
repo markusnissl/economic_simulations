@@ -6,7 +6,6 @@ import code.{SimpleInstruction, __return}
 import ecosim.deep.Interpreter.Assignment
 
 import scala.collection.mutable.ListBuffer
-import squid.lib.MutVar
 
 case class Message[A,R](mtd: NonLocalMethod[A,R], arg: OpenCode[A])
 
