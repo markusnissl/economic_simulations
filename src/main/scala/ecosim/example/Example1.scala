@@ -21,6 +21,11 @@ class Market extends Actor {
     42
   }
 
+  def recursiveTest(l: List[Int]): Unit = l match {
+    case (x::xs) => {println(x); recursiveTest(xs)}
+    case Nil => {}
+  }
+
 }
 
 @sim
@@ -54,6 +59,13 @@ object ManualEmbedding extends App {
 
   val marketSelf = Variable[Market]
 
+  val rFSym = IR.methodSymbol[Market]("recursiveTest")
+  val recursiveFunction = NonBlockingMethod[List[Int]](rFSym, (arg: Variable[List[Int]]) => LetBinding(
+    None,
+    If(code"$arg.tail.isEmpty == false", CallMethod[List[Int], Unit](rFSym, code"$arg.tail")),
+    ScalaCode(code"""println($arg.head);""")
+  ))
+
   val resultMessageCall = Variable[Any]
 
   val p1 = Variable[_root_.Simulation.RequestMessageInter[Any, Unit]]
@@ -70,7 +82,7 @@ object ManualEmbedding extends App {
 
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
-    marketSell :: marketSellB :: Nil,
+    marketSell :: marketSellB :: recursiveFunction :: Nil,
     LetBinding(Option(bindingTest), ScalaCode[Int](code"0"),
       Forever(
         LetBinding(None, handleMessage,
@@ -78,7 +90,10 @@ object ManualEmbedding extends App {
         LetBinding(Option(bindingTest), ScalaCode[Int](code"$bindingTest + 1"), ScalaCode(code"""println("Binding test:",$bindingTest)""")),
             LetBinding(None,
         CallMethod[Int, Int](marketSell.sym, code"10"),
+              LetBinding(None,
+                CallMethod[List[Int], Unit](recursiveFunction.sym, code"List(10,20,30)"),
         Wait(code"1")
+              )
             )
           )
         )

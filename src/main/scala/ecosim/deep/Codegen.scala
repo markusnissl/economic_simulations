@@ -164,6 +164,21 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
     }
   }
 
+  private def mergeMerger(com: List[OpenCode[Unit]], tmp: ListBuffer[(Boolean, Boolean)]): Unit = {
+    val mFirst = merger.head
+    val mLast = merger.last
+    val onlyOne = merger.length == 1
+    merger = tmp
+    if (onlyOne) {
+      merger.append((mFirst._1,mLast._2))
+    } else {
+      merger.append((mFirst._1,false))
+      com.tail.foreach(x => merger.append((false, false)))
+      //Set last to correct end type (even though it will not be merged with f2, because it has false
+      merger.update(merger.length-1, (false, mLast._2))
+    }
+  }
+
   private def createCodeLogic(algo: Algo[_]): List[OpenCode[Unit]] = {
     algo match {
       case Forever(bdy) => {
@@ -249,23 +264,21 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
       case CallMethodC(methodId, arg) => {
         //What we have to do:
         // 1. Push next position on stack
-        // 2. Set Parameters
+        // 2. Set Parameters (TODO: save prev one if recursive)
         // 2. Jump to position where method is located
         val f1: OpenCode[Unit] = code"""$posSafer := (($pos!) + 1) :: ($posSafer!); $methodVariableTableVar!($methodId) :=  $arg; $pos := (($methodLookupTableVar!($methodId)) - 1); ()"""
         // 3. Method will return to position pushed on stack and contain returnValue
-        // 4. TODO for later: store and restore variables + dependency analysis to restore only needed ones
         merger.append((true, false))
         List(f1)
       }
       case CallMethod(sym, arg) => {
         //What we have to do:
         // 1. Push next position on stack
-        // 2. Set Parameters
+        // 2. Set Parameters (TODO: save prev one if recursive)
         // 3. Jump to position where method is located
         val methodId = Const(methodIdMapping.map(_.swap).get(sym).get)
         val f1: OpenCode[Unit] = code"""$posSafer := (($pos!) + 1) :: ($posSafer!); $methodVariableTableVar!($methodId) :=  $arg; $pos := (($methodLookupTableVar!($methodId)) - 1); ()"""
         // 3. Method will return to position pushed on stack and contain returnValue
-        // 4. TODO for later: store and restore variables + dependency analysis to restore only needed ones
         merger.append((true, false))
         List(f1)
       }
@@ -294,20 +307,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         merger.append((true, false)) //f3_0
         val f3 = mergeCodes(f3_1, merger.toList)
 
-        val mFirst = merger.head
-        val mLast = merger.last
-        val onlyOne = merger.length == 1
-        merger = tmp
-        if (onlyOne) {
-          merger.append((mFirst._1,mLast._2))
-        } else {
-          merger.append((mFirst._1,false))
-          f3.tail.foreach(x => merger.append((false, false)))
-          //Set last to correct end type (even though it will not be merged with f2, because it has false
-          println(merger)
-          merger.update(merger.length-1, (false, mLast._2))
-          println(merger)
-        }
+        mergeMerger(f3, tmp)
 
         val f2 = code"""if($iter.hasNext) {$posSafer := ($pos!) :: ($posSafer!); $listValMut := $iter.next;} else {$pos := ($pos!) + ${Const(f3.length)};}"""
 
@@ -349,6 +349,20 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
 
           met1 ::: List(met2) ::: met3
         }
+      }
+      case If(cond, body) => {
+        //Append for met1 before calling met2
+        merger.append((true, false))
+
+        val tmp = merger
+        merger = ListBuffer()
+        val met2_1 = createCodeLogic(body)
+        val met2 = mergeCodes(met2_1, merger.toList)
+        mergeMerger(met2, tmp)
+
+        val met1 = code"""if(!$cond) {$pos := ($pos!) + ${Const(met2.length)};}"""
+
+        List(met1) ::: met2
       }
     }
   }

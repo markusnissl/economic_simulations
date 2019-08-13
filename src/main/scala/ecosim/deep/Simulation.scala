@@ -18,6 +18,8 @@ case class CallMethodC[E, R: CodeType](methodId: OpenCode[Int], arg: OpenCode[E]
 case class Send[E,R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: Message[E,R])(implicit val E: CodeType[E], implicit val R:CodeType[R]) extends Algo[R]
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
+case class If(cond: OpenCode[Boolean], body:Algo[Unit]) extends Algo[Unit]
+
 /***
   * used for both bindings and sequences of Algos
   */
