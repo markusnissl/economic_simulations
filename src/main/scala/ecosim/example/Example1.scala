@@ -1,9 +1,12 @@
 package ecosim.example.ex1
 
 import code.{SimpleInstruction, __goto, __return}
+import ecosim.classLifting.{Actor1, Actor2, Lifter, MainClass}
 import ecosim.deep.Interpreter.Assignment
 import ecosim.runtime._
 import ecosim.sim
+import ecosim.deep.IR
+import IR.TopLevel._
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -174,5 +177,4 @@ object ManualEmbedding extends App {
   val simu = new _root_.Simulation.Simulation()
   simu.init(actors)
   simu.run(7)
-
 }

@@ -7,7 +7,7 @@ import ecosim.runtime.Actor
 class MainClass {
   def mainLoop(): List[Actor] = {
     val a = new Actor1()
-    List(new Actor1(), new Actor2(), new Actor1(), a)
+    List(new Actor2(), a)
   }
 }
 
@@ -15,14 +15,17 @@ case class Other() {
   def met2(par1: String) = {
     println(par1)
   }
-  def loop() = {
-    println("A")
-  }
 }
 
 @lift
 class Actor2 extends Actor {
   def sell() = println("i sell stuff")
+  def loop() = {
+    while(true){
+      sell()
+      SpecialOperations.waitTurns(1)
+    }
+  }
 }
 
 @lift
@@ -35,24 +38,20 @@ class Actor1 extends Actor {
   var other = Other()
   def loop() = {
     while(true) {
-      a.foreach(x => {
-        met2(x)
-      })
+      met1(1,1)
+      SpecialOperations.waitTurns(3)
     }
   }
-  def met2(a: Int) = if (a == 3) println(a)
+  def met2(figure: Int) = if (3 == 3) println("PRINTING 3")
   def met3(): String = {other.met2("afk"); "afk"}
   def met1(par1: Int, par2: Int) = {
-    println("a")
-    println("b")
-    println("c")
-    map(1) = 1
+    println("whoa")
     3
 
 //    a.foreach(x => b.foreach(y => println(x + y)))
 //    var d = 0
 //    while (true) {
-//      a.foreach(var1 => b.foreach(var2 => {
+//      /a.foreach(var1 => b.foreach(var2 => {
 //        d = var1 + var2
 //        println(d)
 //      }))

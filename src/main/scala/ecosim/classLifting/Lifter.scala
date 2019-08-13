@@ -6,6 +6,7 @@ import IR.Predef._
 import IR.TopLevel._
 import IR.Predef.base.MethodApplication
 import ecosim.runtime.Actor
+import squid.ir.RuntimeSymbols.MtdSymbol
 
 class Lifter {
   def liftActor[T <: ecosim.runtime.Actor](clasz: Clasz[T])= {
@@ -18,7 +19,7 @@ class Lifter {
         endStates = State(IR.MtdSymbol(field.symbol), field.init) :: endStates
       })
       var endMethods: List[Method[_, _]] = List()
-      var mainAlgo: Algo[Unit] = Forever(ScalaCode(code"()"))
+      var mainAlgo: Algo[Unit] = Forever(Wait(code"1"))
       clasz.methods.map(method => {
         val cde = method.body
         //TODO: give a better way to label the main loop method
@@ -32,10 +33,10 @@ class Lifter {
           val mtdBody = liftCode(cde)
           val params = method.vparams.flatten
           //TODO fix the input parameters of the method body
-          endMethods = LocalMethod(IR.MtdSymbol(method.symbol), (variable1: Variable[Int]) => mtdBody ):: endMethods
+          endMethods = LocalMethod(IR.MtdSymbol(method.symbol), (par1: Variable[Int]) => mtdBody ):: endMethods
         }
       })
-      ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
+    (ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]]), endMethods)
   }
 
   def liftInitCode(clasz: Clasz[_]): OpenCode[List[Actor]] = {
@@ -48,14 +49,21 @@ class Lifter {
       code"List[Actor]()"
     }
   }
-
-  def apply(startClasses: List[Clasz[_ <: Actor]], mainClass: Clasz[_]) {
-    var endTypes: List[ActorType[_]] = List()
+  def apply(startClasses: List[Clasz[_ <: Actor]], mainClass: Clasz[_]): ecosim.deep.Simulation = {
     var actorsInit: OpenCode[List[Actor]] = liftInitCode(mainClass)
-    endTypes = startClasses.map(c => {
+    var methodsIdMap: Map[Int, ecosim.deep.IR.MtdSymbol] = Map()
+    var counter = 0
+    val endTypesMethods = startClasses.map(c => {
       liftActor(c)
-    }).foldRight(endTypes)((a, endTypes) => a :: endTypes)
-    ecosim.deep.Simulation(endTypes, actorsInit, Map[Int, ecosim.deep.IR.MtdSymbol]())
+    })
+    var endTypes = endTypesMethods.foldRight(List[ActorType[_]]())((a, endTypes) => a._1 :: endTypes)
+    endTypesMethods.foreach(typeMethods => {
+      typeMethods._2.foreach(method => {
+        methodsIdMap = methodsIdMap + (counter -> method.sym)
+        counter += 1
+      })
+    })
+    ecosim.deep.Simulation(endTypes, actorsInit, methodsIdMap)
   }
 
   def liftCode[T: CodeType](cde: OpenCode[T]): Algo[T] = {
@@ -70,6 +78,9 @@ class Lifter {
         f.asInstanceOf[Algo[T]]
       case code"while(true) $body" =>
         val f = Forever(liftCode(body))
+        f.asInstanceOf[Algo[T]]
+      case code"${MethodApplication(ma)}:Any" if ma.symbol.asMethodSymbol.name.toString() == "waitTurns" =>
+        val f = Wait(code"1")
         f.asInstanceOf[Algo[T]]
       //TODO method calls, and message sending
       //TODO check if inside a scala code, there is one of the supported operations(e.g. if the body of 'if' contains a foreach)
@@ -101,29 +112,10 @@ object App1 extends App {
   val startClasses: List[Clasz[_ <: Actor]] = List(cls1, cls2)
   val mainClass = cls3
   val lifter = new Lifter()
-  val simu = lifter(startClasses, mainClass)
-//  val m = cls1.methods.head
-//  lifter.liftCode(m.body.asInstanceOf[OpenCode[Any]])
-//  val cde1 = m.body
-//  lifter.liftCode(cde1)
-//
-//  println()
-//  println(m.body.getClass)
-//  println()
-//  println(cde1.getClass)
-//  val cde = code"println('a');println(42);123"
-//  test(cde1)
-//
-//  def test[T: CodeType](cde: OpenCode[T]) = {
-//    cde match {
-//      case code"$e; $rest: T" =>
-//        //case code"$e; $rest: Int" =>
-//        println("success")
-//        println(e)
-//        println(rest)
-//      case _ =>
-//        println("fail")
-//    }
-//  }
+  val simulation1 = lifter(startClasses, mainClass)
+  val actors1 = simulation1.codegen()
+  val simu1 = new _root_.Simulation.Simulation()
+  simu1.init(actors1)
+  simu1.run(10)
 
 }
