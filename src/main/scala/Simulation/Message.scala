@@ -54,7 +54,7 @@ case class ResponseMarketData(override val senderId: AgentId, override val recei
 
 // General message
 import ecosim.deep.IR.Predef._
-case class RequestMessageInter[A,B](override val senderId: AgentId, override val receiverId: AgentId, methodId: Int, arg: A)(implicit val B:CodeType[B]) extends Message {
+case class RequestMessageInter[B](override val senderId: AgentId, override val receiverId: AgentId, methodId: Int, argss: List[List[Any]])(implicit val B:CodeType[B]) extends Message {
   //Fixme: adapt for working in a way compatible to interpeter
   def reply(owner: Owner, returnValue:Any): Unit = {
     val msg = ResponseMessageInter[Any](receiverId, senderId, returnValue)

@@ -1,4 +1,4 @@
-package ecosim.deep
+/*package ecosim.deep
 
 import _root_.Simulation.{RequestMessageInter, ResponseMessageInter, SimO}
 import code.{Instruction, __call, __do, __doResult, __doblock, __dowhile, __forever, __goto, __if, __wait}
@@ -243,3 +243,4 @@ object InterpreterTest extends App {
 
 
 }
+*/

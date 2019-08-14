@@ -22,70 +22,82 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
 
   var methodLookupTableVar = Variable[MutVar[Map[Int, Int]]]
   var methodLookupTable: OpenCode[Map[Int, Int]] = code"Map[Int, Int]()"
-  var methodVariableTable: OpenCode[Map[Int, MutVar[Any]]] = code"Map[Int, MutVar[Any]]()"
-  var methodVariableTableVar = Variable[MutVar[Map[Int, MutVar[Any]]]]
-  var methodVariableTableStack: OpenCode[Map[Int, MutVar[List[Any]]]] = code"Map[Int, MutVar[List[Any]]]()"
-  var methodVariableTableVarStack = Variable[MutVar[Map[Int, MutVar[List[Any]]]]]
+  var methodVariableTable: OpenCode[Map[Int, MutVar[List[MutVar[Any]]]]] = code"Map[Int, MutVar[List[MutVar[Any]]]]()"
+  var methodVariableTableVar = Variable[MutVar[Map[Int, MutVar[List[MutVar[Any]]]]]]
+  var methodVariableTableStack: OpenCode[Map[Int, MutVar[List[List[Any]]]]] = code"Map[Int, MutVar[List[List[Any]]]]()"
+  var methodVariableTableVarStack = Variable[MutVar[Map[Int, MutVar[List[List[Any]]]]]]
 
   var variables: List[VarWrapper[_]] = List()
 
   var varSavers = List[VarWrapper[_]]()
 
-  var merger:ListBuffer[(Boolean, Boolean)] = ListBuffer()
+  var merger: ListBuffer[(Boolean, Boolean)] = ListBuffer()
 
   def initVar[A, R: CodeType](variable: VarWrapper[A], rest: OpenCode[R]): OpenCode[R] = {
     import variable.A
-    code"val ${variable.to} = ((MutVar[Any](null)).asInstanceOf[MutVar[A]]); $rest"
+    code"val ${variable.to} = MutVar(${nullValue[A]}); $rest"
   }
 
   def generateMutVarInit[R: CodeType](variables: List[VarWrapper[_]], after: OpenCode[R]): OpenCode[R] = variables match {
     case Nil => code"$after"
     case (x :: xs) => {
       initVar(x, generateMutVarInit(xs, after))
+
     }
   }
 
-  def generateMethodTable(data: List[(OpenCode[List[() => Unit]], Variable[_], Int)], pos: OpenCode[Int]): OpenCode[Map[Int, Int]] = data match {
+  def generateMethodTable(data: List[(OpenCode[List[() => Unit]], List[Variable[_]], Int)], pos: OpenCode[Int]): OpenCode[Map[Int, Int]] = data match {
     case (x :: xs) => code"""val l = ${x._1}.length; $${generateMethodTable(xs, code"$$pos + l")} + (${Const(x._3)} -> $pos)"""
     case Nil => code"Map[Int, Int]()"
   }
 
-  def getMap[A: CodeType](variable: Variable[MutVar[A]], pos: Int): OpenCode[Map[Int, MutVar[A]]] = {
-    code"Map(${Const(pos)} -> ${variable})"
+  def getVariableTablelist(data: List[Variable[MutVar[Any]]]): OpenCode[List[MutVar[Any]]] = data match {
+    case x :: xs => code"$x :: ${getVariableTablelist(xs)}"
+    case Nil => code"Nil"
   }
 
-  def generateVariableTable(data: List[(OpenCode[List[() => Unit]], Variable[MutVar[Any]], Int)]): OpenCode[Map[Int, MutVar[Any]]] = data match {
-    case (x :: xs) => code"""(${getMap(x._2, x._3)}) ++ $${generateVariableTable(xs)}"""
-    case Nil => code"Map[Int, MutVar[Any]]()"
+  def generateVariableTable(data: List[(OpenCode[List[() => Unit]], List[Variable[MutVar[Any]]], Int)]): OpenCode[Map[Int, MutVar[List[MutVar[Any]]]]] = data match {
+    case (x :: xs) => code"""Map(${Const(x._3)} -> MutVar(${getVariableTablelist(x._2)})) ++ $${generateVariableTable(xs)}"""
+    case Nil => code"Map[Int, MutVar[List[MutVar[Any]]]]()"
   }
 
-  def generateVariableTableStack(data: List[(OpenCode[List[() => Unit]], Variable[MutVar[Any]], Int)]): OpenCode[Map[Int, MutVar[List[Any]]]] = data match {
+  def generateVariableTableStack(data: List[(OpenCode[List[() => Unit]], List[Variable[MutVar[Any]]], Int)]): OpenCode[Map[Int, MutVar[List[List[Any]]]]] = data match {
     case (x :: xs) => {
-      val entry = code"Map(${Const(x._3)} -> MutVar(List[Any]()))"
+      val entry = code"Map(${Const(x._3)} -> MutVar(List[List[Any]]()))"
       code"""$entry ++ $${generateVariableTableStack(xs)}"""
     }
-    case Nil => code"Map[Int, MutVar[List[Any]]]()"
+    case Nil => code"Map[Int, MutVar[List[List[Any]]]]()"
   }
 
   //This is not supported :(
   //var testMethMap:ClosedCode[Map[Int, Variable[MutVar[_]]]] = code"Map[Int,Variable[MutVar[_]]]()"
 
-  private def codeGenMethod[A](method: Method[A, _]): (OpenCode[List[() => Unit]], Variable[MutVar[Any]], Int) = {
-    import method.A
+  private def codeGenMethod(method: LiftedMethod[_]): (OpenCode[List[() => Unit]], List[Variable[MutVar[Any]]], Int) = {
 
-    val methodArgs = Variable[A];
     //FIXME: Cannot create a map in squid with _ param, therefore have to use any
     // Cannot define map outside, since methods may have recursive dependency, so lookup has to be made inside squid
 
-    val methodArgsMut = Variable[MutVar[Any]];
-    //    val methodArgsMut = Variable[MutVar[A]];
-    val methodAlgo = method.body(methodArgs)
-    variables = VarWrapper(methodArgs.asInstanceOf[Variable[Any]], methodArgsMut) :: variables
+    var code = this.createCode(method.body, true)
 
-    val f0 = code"""${this.createCode(methodAlgo, true).subs(methodArgs).~>(code"($methodArgsMut!).asInstanceOf[A]")}"""
+    var varList = ListBuffer[Variable[MutVar[Any]]]()
+
+    method.mtd.vparams.foreach(paramList => {
+      paramList.foreach(param => {
+        val methodArgsMut = Variable[MutVar[Any]];
+        varList.append(methodArgsMut)
+        variables = VarWrapper(param.asInstanceOf[Variable[Any]], methodArgsMut) :: variables
+        val tmp = code
+        val input = param.asInstanceOf[Variable[Any]]
+        val typ = param.Typ
+        code = tmp.subs(input).~>(code"($methodArgsMut!).asInstanceOf[$typ]")
+      }
+      )
+    })
+
+    //    val methodArgsMut = Variable[MutVar[A]];
 
     //variables = VarWrapper(methodArgs, methodArgsMut) :: variables
-    (f0 , methodArgsMut, methodIdMapping.map(_.swap).get(method.sym).get)
+    (code, varList.toList, methodIdMapping.map(_.swap).get(method.sym).get)
   }
 
 
@@ -96,13 +108,14 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
     val commands = methodCodes.foldLeft(main)((x, y) => code"$x ::: ${y._1}")
 
     methodLookupTable = generateMethodTable(methodCodes, code"$main.length")
-    methodVariableTable = generateVariableTable(methodCodes.map(x => (x._1, x._2.asInstanceOf[Variable[MutVar[Any]]], x._3)))
-    methodVariableTableStack = generateVariableTableStack(methodCodes.map(x => (x._1, x._2.asInstanceOf[Variable[MutVar[Any]]], x._3)))
+    methodVariableTable = generateVariableTable(methodCodes)
+    methodVariableTableStack = generateVariableTableStack(methodCodes)
 
     val finalCode = this.createExec(this.actorType.self, commands)
 
     val f = finalCode.compile
     f(selfRef)
+
   }
 
 
@@ -141,9 +154,9 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
       """).unsafe_asClosedCode
   }
 
-  def createCode(algo: Algo[_], isMethod: Boolean = false): OpenCode[List[() =>Unit]] = {
+  def createCode(algo: Algo[_], isMethod: Boolean = false): OpenCode[List[() => Unit]] = {
     merger.clear()
-    var commands:List[OpenCode[Unit]] = createCodeLogic(algo)
+    var commands: List[OpenCode[Unit]] = createCodeLogic(algo)
     if (isMethod) {
       val f1 = code"$pos := ((($posSafer!).head) - 1); $posSafer := ($posSafer!).tail; ()"
       commands = commands ::: List(f1)
@@ -154,12 +167,14 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
 
     println(commands)
 
-    val start:OpenCode[List[() => Unit]] = code"List[() => Unit]()"
+    val start: OpenCode[List[() => Unit]] = code"List[() => Unit]()"
     commands.map(x => code"List(() => ${x})").foldLeft(start)((x, y) => code"$x ::: $y")
   }
 
-  private def mergeCodes(com: List[OpenCode[Unit]], mergeInfo:List[(Boolean, Boolean)]): List[OpenCode[Unit]] = {
-    if(mergeInfo.tail.isEmpty) {
+  private def mergeCodes(com: List[OpenCode[Unit]], mergeInfo: List[(Boolean, Boolean)]): List[OpenCode[Unit]] = {
+    if (mergeInfo.isEmpty) {
+      com
+    } else if (mergeInfo.tail.isEmpty) {
       com
     } else {
       val current = mergeInfo.head
@@ -219,22 +234,17 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
 
         List(met)
       }
-      case send: Send[b, c] => {
+      case send: Send[c] => {
         import send.R
         //code"${msg.mtd.sym}"
         val methodId = Const(methodIdMapping.map(_.swap).get(send.msg.mtd.sym).get)
-
-        var blocking = false
-        if (send.msg.mtd.isInstanceOf[BlockingMethod[_, _]]) {
-          blocking = true
-        }
 
         val f1: OpenCode[Unit] =
           code"""
                     val sender = ${send.actorFrom};
                     val receiver = ${send.actorRef};
-                    val arg = ${send.msg.arg};
-                    val requestMessage = RequestMessageInter[${send.E},Any](sender.id, receiver.id, ${methodId}, arg);
+                    val argss:List[List[Any]] = ${send.msg.argss};
+                    val requestMessage = RequestMessageInter[Any](sender.id, receiver.id, ${methodId}, argss);
                     sender.sendMessage(requestMessage);
                     sender.setMessageResponseHandler(requestMessage.sessionId, (response: _root_.Simulation.Message) => {
                       $responseMessage := response.asInstanceOf[ResponseMessageInter[Any]]
@@ -256,18 +266,18 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
                        ()"""
 
 
-        if (blocking) {
+        if (send.msg.mtd.blocking) {
           merger.append((true, true))
           merger.append((true, false))
           merger.append((true, false))
           merger.append((true, true))
-          List(f1,f2,f3,f4)
+          List(f1, f2, f3, f4)
         } else {
           merger.append((true, true))
           List(f1)
         }
       }
-      case CallMethodC(methodId, arg) => {
+      case CallMethodC(methodId, argss) => {
         //What we have to do:
         // 1. Push next position on stack
         // 2. Set Parameters and save current params of method
@@ -275,11 +285,16 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         val f1: OpenCode[Unit] =
         code"""
           $posSafer := (($pos!) + 1) :: ($posSafer!);
-          val arg = (($methodVariableTableVar!)($methodId)!)
+          val tmpArgs = ${argss}.asInstanceOf[List[List[Any]]].flatten
           val currentList = ($methodVariableTableVarStack!).get($methodId).get!
-          val newStackVal = (arg :: currentList)
+          val newStackVal:List[List[Any]] = (tmpArgs :: currentList)
           $methodVariableTableVarStack!($methodId) := newStackVal;
-          $methodVariableTableVar!($methodId) :=  $arg;
+
+          val tmpMethodArgs:List[MutVar[Any]] = $methodVariableTableVar!($methodId)!
+          val merged = tmpMethodArgs zip tmpArgs
+          for(x <- merged) {
+            x._1 := x._2
+          }
           $pos := (($methodLookupTableVar!($methodId)) - 1);
           ()
           """
@@ -288,17 +303,25 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         val f2: OpenCode[Unit] =
         code"""
           val currentList = ($methodVariableTableVarStack!).get($methodId).get.!;
-          $methodVariableTableVar!($methodId) := currentList.head;
           ($methodVariableTableVarStack!)($methodId) := currentList.tail;
+
+          if (!currentList.tail.isEmpty) {
+            val tmpMethodArgs:List[MutVar[Any]] = $methodVariableTableVar!($methodId)!
+            val merged = tmpMethodArgs zip currentList.tail.head
+            for(x <- merged) {
+              x._1 := x._2
+            }
+          }
+
           ()
           """
         merger.append((true, false))
         merger.append((true, true))
         List(f1, f2)
       }
-      case CallMethod(sym, arg) => {
+      case CallMethod(sym, argss) => {
         val methodId = Const(methodIdMapping.map(_.swap).get(sym).get)
-        createCodeLogic(CallMethodC(methodId, arg))
+        createCodeLogic(CallMethodC(methodId, argss))
       }
       case fe: Foreach[b, _] => {
         import fe.E
@@ -331,7 +354,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[Int, IR.MtdSymbol]
         val f2 = code"""if($iter.hasNext) {$posSafer := ($pos!) :: ($posSafer!); $listValMut := $iter.next;} else {$pos := ($pos!) + ${Const(f3.length)};}"""
 
 
-        (List(f1,f2) ::: f3).map(x => x.subs(iter).~>(code"($iterMut!)")).map(x => x.subs(fe.variable).~>(code"($listValMut!)"))
+        (List(f1, f2) ::: f3).map(x => x.subs(iter).~>(code"($iterMut!)")).map(x => x.subs(fe.variable).~>(code"($listValMut!)"))
       }
       case lb: LetBinding[v, a] => {
         import lb.V

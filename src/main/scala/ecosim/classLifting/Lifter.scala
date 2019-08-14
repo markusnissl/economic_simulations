@@ -15,12 +15,13 @@ class Lifter {
       var endStates: List[State[_]] = List()
       //TODO check if this works well, seems like theres something wrong with the type of created states
       clasz.fields.foreach(field => {
+        import field.A
         //TODO ask if this is a correct way to instantiate a state symbol, also goes for method symbols later in the code
-        endStates = State(IR.MtdSymbol(field.symbol), field.init) :: endStates
+        //endStates = State[A](IR.MtdSymbol(field.symbol), field.init) :: endStates
       })
-      var endMethods: List[Method[_, _]] = List()
+      var endMethods: List[LiftedMethod[_]] = List()
       var mainAlgo: Algo[Unit] = Forever(Wait(code"1"))
-      clasz.methods.map(method => {
+      clasz.methods.foreach(method => {
         val cde = method.body
         //TODO: give a better way to label the main loop method
         if (method.symbol.asMethodSymbol.name.toString() == "loop") {
@@ -33,7 +34,9 @@ class Lifter {
           val mtdBody = liftCode(cde)
           val params = method.vparams.flatten
           //TODO fix the input parameters of the method body
-          endMethods = LocalMethod(IR.MtdSymbol(method.symbol), (par1: Variable[Int]) => mtdBody ):: endMethods
+          endMethods = (new LiftedMethod[Any](clasz, mtdBody, true) {
+            override val mtd: cls.Method[Any, cls.Scp] = method.asInstanceOf[this.cls.Method[Any,cls.Scp]]
+          }) :: endMethods
         }
       })
     (ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]]), endMethods)
