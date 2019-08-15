@@ -3,21 +3,19 @@ package deep
 
 import IR.Predef._
 
-case class Message[R](mtd: LiftedMethod[R], argss: OpenCode[List[List[_]]])
+case class Message[R](mtd: LiftedMethod[R], argss: List[List[OpenCode[_]]])
 
 sealed abstract class Algo[A](implicit val tpe: CodeType[A])
 case class Forever(body: Algo[_]) extends Algo[Unit]
 case class Wait(cde: OpenCode[Int]) extends Algo[Unit]
-case class CallMethod[R: CodeType](sym: IR.MtdSymbol, argss: OpenCode[List[List[_]]]) extends Algo[R]
-case class CallMethodC[R: CodeType](methodId: OpenCode[Int], argss: OpenCode[List[List[_]]]) extends Algo[R]
+case class CallMethodDebug[R: CodeType](sym: IR.MtdSymbol, argss: List[List[OpenCode[_]]]) extends Algo[R]
+case class CallMethod[R: CodeType](methodId: Int, argss: List[List[OpenCode[_]]]) extends Algo[R]
 case class Send[R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: Message[R])(implicit val R:CodeType[R]) extends Algo[R]
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
-case class If(cond: OpenCode[Boolean], body:Algo[Unit]) extends Algo[Unit]
-
-/***
-  * used for both bindings and sequences of Algos
-  */
+case class NoOp() extends Algo[Any]
+case class If[A](cond: OpenCode[Boolean], body:Algo[A])(implicit val A: CodeType[A]) extends Algo[A]
+case class IfElse[A](cond: OpenCode[Boolean], ifBody:Algo[A], elseBody:Algo[A])(implicit val A: CodeType[A]) extends Algo[A]
 case class LetBinding[V: CodeType, A: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
 
 abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], val body: Algo[R], val blocking: Boolean) {
@@ -73,14 +71,14 @@ case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], me
   }*/
 
   // Just for testing at the moment
-  def codegen(selfRef: X, methodIdMapping: Map[Int, IR.MtdSymbol]): (Int, Int, Int) => (Int, Int) = {
+  def codegen(selfRef: X, methodIdMapping: Map[IR.MtdSymbol, Int]): (Int, Int, Int) => (Int, Int) = {
     val cg = new Codegen[X](methodIdMapping, this)
     cg.compile(selfRef)
   }
 
 }
 
-case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]], methodIdMapping: Map[Int, IR.MtdSymbol]) {
+case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]], methodIdMapping: Map[IR.MtdSymbol, Int]) {
 
   /*def compile(): List[runtime.Actor] = {
     val actors = this.init.unsafe_asClosedCode.run

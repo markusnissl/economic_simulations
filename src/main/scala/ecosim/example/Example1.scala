@@ -81,7 +81,7 @@ object ManualEmbedding extends App {
   val rFParam1:Variable[_] = rF.vparams.head.head
   val recursiveFunction = new LiftedMethod[Unit](m, LetBinding(
     None,
-    If(code"${rFParam1}.asInstanceOf[List[Int]].tail.isEmpty == false", CallMethod[Unit](rF.symbol, code"List(List(${rFParam1}.asInstanceOf[List[Int]].tail))")),
+    If(code"${rFParam1}.asInstanceOf[List[Int]].tail.isEmpty == false", CallMethodDebug[Unit](rF.symbol, List(List(code"${rFParam1}.asInstanceOf[List[Int]].tail")))),
     ScalaCode(code"""println(${rFParam1}.asInstanceOf[List[Int]].head);""")
   ), false) {
     override val mtd: cls.Method[Unit, cls.Scp] = rF.asInstanceOf[this.cls.Method[Unit, cls.Scp]]
@@ -89,30 +89,45 @@ object ManualEmbedding extends App {
 
   val resultMessageCall = Variable[Any]
 
-  val p1 = Variable[_root_.Simulation.RequestMessageInter[Unit]]
+  val p1 = Variable[_root_.Simulation.RequestMessageInter]
+  //Handle later
+
+  val marketFunctions = marketSell :: marketSellB :: recursiveFunction :: Nil
+
+  val algo:Algo[Any] = NoOp()
+  val callCode = marketFunctions.zipWithIndex.foldRight(algo)((a,b) => {
+    val argss:List[List[OpenCode[_]]] = a._1.mtd.vparams.zipWithIndex.map(x => {
+      x._1.zipWithIndex.map(y => {
+        code"$p1.argss(${Const(x._2)})(${Const(y._2)})"
+      })
+    })
+    IfElse(code"$p1.methodId==${Const(a._2)}", CallMethod[Any](a._2, argss), b)
+  })
+
   val handleMessage = Foreach(
     code"$marketSelf.getRequestMessages",
     p1, LetBinding(
       Option(resultMessageCall),
-      CallMethodC[Any](code"$p1.methodId", code"$p1.argss"),
+      callCode,
       ScalaCode(code"""$p1.reply($marketSelf, $resultMessageCall)""")
     )
   )
+
 
   val bindingTest = Variable[Int]
 
   val market = ActorType[Market]("Market",
     State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
-    marketSell :: marketSellB :: recursiveFunction :: Nil,
+    marketFunctions,
     LetBinding(Option(bindingTest), ScalaCode[Int](code"0"),
       Forever(
         LetBinding(None, handleMessage,
           LetBinding(None,
             LetBinding(Option(bindingTest), ScalaCode[Int](code"$bindingTest + 1"), ScalaCode(code"""println("Binding test:",$bindingTest)""")),
             LetBinding(None,
-              CallMethod[Unit](marketSell.sym, code"List(List(10))"),
+              CallMethodDebug[Unit](marketSell.sym, List(List(code"10"))),
               LetBinding(None,
-                CallMethod[Unit](recursiveFunction.sym, code"List(List(List(10,20,30)))"),
+                CallMethodDebug[Unit](recursiveFunction.sym, List(List(code"List(10,20,30)"))),
                 Wait(code"1")
               )
             )
@@ -140,7 +155,7 @@ object ManualEmbedding extends App {
       Send[Unit](
         code"$farmerSelf",
         code"$p2",
-        Message(tell, code"List(List($farmerSelf, $farmerSelf.happiness))")
+        Message(tell, List(List(code"$farmerSelf", code"$farmerSelf.happiness")))
       )
     ),
     false) {
@@ -154,7 +169,7 @@ object ManualEmbedding extends App {
     tell :: nofifyPeers :: Nil,
     Forever(
       LetBinding(None,
-        LetBinding[Int, Unit](Option(testResult), Send[Int](code"$farmerSelf", code"$farmerSelf.market", Message(marketSellB, code"List(List(500))")), ScalaCode(code"""println("TEST_VAR",$testResult)""")),
+        LetBinding[Int, Unit](Option(testResult), Send[Int](code"$farmerSelf", code"$farmerSelf.market", Message(marketSellB, List(List(code"500")))), ScalaCode(code"""println("TEST_VAR",$testResult)""")),
         Wait(code"1")
       )
     ),
@@ -162,12 +177,13 @@ object ManualEmbedding extends App {
 
   val actorTypes: List[ActorType[_]] = market :: farmer :: Nil
 
-  var methodIdMapping: Map[Int, IR.MtdSymbol] = Map()
+  var methodIdMapping: Map[IR.MtdSymbol, Int] = Map()
 
-  var counter = 0
+
   for (a <- actorTypes) {
+    var counter = 0
     for (m <- a.methods) {
-      methodIdMapping = methodIdMapping + (counter -> m.sym)
+      methodIdMapping = methodIdMapping + (m.sym -> counter)
       counter = counter + 1
     }
   }
@@ -195,14 +211,14 @@ object ManualEmbedding extends App {
           LetBinding(None,
             Foreach(code"List(1,2,3)", p3, ScalaCode(code"println($p3)")),
             LetBinding(None,
-              CallMethod[Unit](marketSell.sym, code"List(List(1000))"),
+              CallMethodDebug[Unit](marketSell.sym, List(List(code"1000"))),
               LetBinding(None,
                 Wait(code"1"),
                 LetBinding(None,
                   LetBinding(Option(testResult), ScalaCode[Int](code"42"), ScalaCode(code"println($testResult)")),
                   LetBinding(None,
                     LetBinding(Option(testResult), ScalaCode[Int](code"11"), ScalaCode(code"println($testResult)")),
-                    LetBinding(Option(testResult), CallMethod[Int](marketSellB.sym, code"List(List(422))"), ScalaCode(code"println($testResult)"))
+                    LetBinding(Option(testResult), CallMethodDebug[Int](marketSellB.sym, List(List(code"422"))), ScalaCode(code"println($testResult)"))
                   )
                 )
               )

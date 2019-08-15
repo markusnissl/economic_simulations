@@ -54,7 +54,7 @@ class Lifter {
   }
   def apply(startClasses: List[Clasz[_ <: Actor]], mainClass: Clasz[_]): ecosim.deep.Simulation = {
     var actorsInit: OpenCode[List[Actor]] = liftInitCode(mainClass)
-    var methodsIdMap: Map[Int, ecosim.deep.IR.MtdSymbol] = Map()
+    var methodsIdMap: Map[ecosim.deep.IR.MtdSymbol, Int] = Map()
     var counter = 0
     val endTypesMethods = startClasses.map(c => {
       liftActor(c)
@@ -62,7 +62,7 @@ class Lifter {
     var endTypes = endTypesMethods.foldRight(List[ActorType[_]]())((a, endTypes) => a._1 :: endTypes)
     endTypesMethods.foreach(typeMethods => {
       typeMethods._2.foreach(method => {
-        methodsIdMap = methodsIdMap + (counter -> method.sym)
+        methodsIdMap = methodsIdMap + (method.sym -> counter)
         counter += 1
       })
     })
