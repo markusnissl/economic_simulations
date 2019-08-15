@@ -4,10 +4,12 @@ import code.{SimpleInstruction, __goto, __return}
 import ecosim.classLifting.{Actor1, Actor2, Lifter, MainClass}
 import ecosim.runtime._
 import ecosim.sim
-import ecosim.deep.IR
+import ecosim.deep.{ActorType, IR}
 import IR.TopLevel._
+import _root_.Simulation.Message
 import squid.quasi.lift
 
+import scala.annotation.compileTimeOnly
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
@@ -51,6 +53,65 @@ class Farmer(val market: Market) extends Actor {
 
 }
 
+
+/**
+  * This is a demo environment for running the simulations.
+  * The idea is to run this one on the driver, which creates and deletes the actors accordingly.
+  * Wait for code compilation to see how it works :)
+  */
+@lift
+class Environment() extends Actor {
+
+  private var actorTypes: List[ActorType[Actor]] = List()
+  private val market: Market = new Market()
+
+  private var actorList: List[Actor] = List()
+  private var messages: List[Message] = List()
+
+  //TODO: replace this function by the actual method call while compiling
+  def call(methodId: Int, argss: List[List[Any]]): Any = {
+    ???
+  }
+
+  def handleMessagesNew(): Unit = {
+    this.getRequestMessages.foreach(x => {
+      x.reply(this, call(x.methodId, x.argss))
+    })
+  }
+
+  def main(): Unit = {
+    createFarmer()
+
+    //Local mode
+    while (true) {
+      val mx = messages.groupBy(_.receiverId)
+      this.setReceiveMessages(mx.getOrElse(this.id, List()))
+
+      handleMessagesNew()
+
+      for(el <- actorList) {
+        el.setReceiveMessages(mx.getOrElse(el.id, List()))
+        el.run_until(current_time)
+      }
+      messages = actorList.flatMap(_.getMessages)
+    }
+  }
+
+  def getMarket(): Market = {
+    market
+  }
+
+  def createFarmer(): Farmer = {
+    val aT: ActorType[Farmer] = this.actorTypes.find(_.name == "Farmer").get.asInstanceOf[ActorType[Farmer]]
+    val farmer = new Farmer(market)
+    farmer.useStepFunction = true
+    farmer.stepFunction = aT.getStepFunction(farmer)
+    actorList = farmer :: actorList
+    farmer
+  }
+}
+
+
 @lift
 class SimpleSim() extends Actor {}
 
@@ -78,7 +139,7 @@ object ManualEmbedding extends App {
   }
   val marketSelf = Variable[Market]
 
-  val rFParam1:Variable[_] = rF.vparams.head.head
+  val rFParam1: Variable[_] = rF.vparams.head.head
   val recursiveFunction = new LiftedMethod[Unit](m, LetBinding(
     None,
     If(code"${rFParam1}.asInstanceOf[List[Int]].tail.isEmpty == false", CallMethodDebug[Unit](rF.symbol, List(List(code"${rFParam1}.asInstanceOf[List[Int]].tail")))),
@@ -94,9 +155,9 @@ object ManualEmbedding extends App {
 
   val marketFunctions = marketSell :: marketSellB :: recursiveFunction :: Nil
 
-  val algo:Algo[Any] = NoOp()
-  val callCode = marketFunctions.zipWithIndex.foldRight(algo)((a,b) => {
-    val argss:List[List[OpenCode[_]]] = a._1.mtd.vparams.zipWithIndex.map(x => {
+  val algo: Algo[Any] = NoOp()
+  val callCode = marketFunctions.zipWithIndex.foldRight(algo)((a, b) => {
+    val argss: List[List[OpenCode[_]]] = a._1.mtd.vparams.zipWithIndex.map(x => {
       x._1.zipWithIndex.map(y => {
         code"$p1.argss(${Const(x._2)})(${Const(y._2)})"
       })
@@ -141,7 +202,7 @@ object ManualEmbedding extends App {
   val testResult = Variable[Int]
 
 
-  val tellP2:Variable[Int] = te.vparams.head.tail.head.asInstanceOf[Variable[Int]]
+  val tellP2: Variable[Int] = te.vparams.head.tail.head.asInstanceOf[Variable[Int]]
   val tell = new LiftedMethod[Unit](f, ScalaCode(code"$farmerSelf.happiness = $farmerSelf.happiness - ${tellP2}; ()"), true) {
     override val mtd: cls.Method[Unit, cls.Scp] = te.asInstanceOf[this.cls.Method[Unit, cls.Scp]]
   }

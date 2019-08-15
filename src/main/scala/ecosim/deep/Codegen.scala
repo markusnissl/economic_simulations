@@ -121,7 +121,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
   }
 
 
-  def compile(selfRef: X): (Int, Int, Int) => (Int, Int) = {
+  def compile: (X) => (Int, Int, Int) => (Int, Int) = {
 
     val methodCodes = this.actorType.methods.map(mtd => codeGenMethod(mtd))
     val (main, mainLength) = this.createCode(this.actorType.main)
@@ -158,9 +158,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
 
     println(finalCode)
     val f = finalCode.compile
-    println(f)
-    f(selfRef)
-
+    f
   }
 
 

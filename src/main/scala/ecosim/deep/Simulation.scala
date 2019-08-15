@@ -29,7 +29,6 @@ abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], val body: Algo[R],
   }
   override def toString = s"${sym.asMethodSymbol.owner.name}.${sym.asMethodSymbol.name}"
 
-
 }
 
 
@@ -41,6 +40,7 @@ case class State[A](sym: IR.MtdSymbol, init: OpenCode[A])(implicit val tpe: Code
 
 case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], methods: List[LiftedMethod[_]], main: Algo[Unit], self: Variable[X])(implicit val X:CodeType[X]){
 
+  private var stepFunction: (X) => (Int, Int, Int) => (Int, Int) = _
   /*private def compileMethod[A](method: LiftedMethod[_], args:ListBuffer[Assignment[_]], methodIdMapping: Map[Int, IR.MtdSymbol]): (Variable[_], Vector[SimpleInstruction]) = {
     import method.A
     val methodArgs = Variable[A];
@@ -71,9 +71,13 @@ case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], me
   }*/
 
   // Just for testing at the moment
-  def codegen(selfRef: X, methodIdMapping: Map[IR.MtdSymbol, Int]): (Int, Int, Int) => (Int, Int) = {
+  def codegen(methodIdMapping: Map[IR.MtdSymbol, Int]): Unit = {
     val cg = new Codegen[X](methodIdMapping, this)
-    cg.compile(selfRef)
+    stepFunction = cg.compile
+  }
+
+  def getStepFunction(actor: X): (Int, Int, Int) => (Int, Int) = {
+    stepFunction(actor)
   }
 
 }
@@ -105,6 +109,9 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
   }*/
 
   def codegen(): List[runtime.Actor] = {
+    //Generate step function of actorTypes
+    actorTypes.foreach(_.codegen(methodIdMapping))
+
     val actors = this.init.unsafe_asClosedCode.run
     actors.foreach(a => {
       val actorTypeSearch = actorTypes.find(_.name == a.getClass.getSimpleName)
@@ -117,13 +124,11 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
       actorType match {
         case aT:ActorType[c] => {
           import aT.X
-          a.stepFunction = actorType.asInstanceOf[ActorType[c]].codegen(a.asInstanceOf[c], methodIdMapping)
+          a.stepFunction = actorType.asInstanceOf[ActorType[c]].getStepFunction(a.asInstanceOf[c])
           a.useStepFunction = true
         }
 
       }
-
-
     })
 
     actors
