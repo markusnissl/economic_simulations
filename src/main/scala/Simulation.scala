@@ -4,6 +4,7 @@ import Markets._
 import Owner._
 import Commodities._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 
 
@@ -70,6 +71,7 @@ class Simulation extends Serializable {
 
     if (GLOBAL.RUN_SPARK) {
       sc.setLogLevel("ERROR")
+      sc.setCheckpointDir("checkpoint/")
       simsSpark = sc.parallelize(sims).union(sc.parallelize(market.values.toList)).map(x => (x.id,x))
     }
 
@@ -155,9 +157,16 @@ class Simulation extends Serializable {
         simsSpark = simsSpark.mapValues{ s =>
           s.handleMessages()
           s.run_until(timer)._1.asInstanceOf[SimO]
-        }.cache()
+        }.persist(StorageLevel.MEMORY_AND_DISK)
 
-        var dMessages:RDD[(AgentId, List[Message])] = simsSpark.flatMap(_._2.getMessages).map(x => (x.receiverId, x)).combineByKey(
+        // Checkpoint sims object, so that it does not get too big
+        // see: https://stackoverflow.com/questions/36421373/java-lang-stackoverflowerror-and-checkpointing-on-spark
+        if (timer%50 == 0) {
+          simsSpark.checkpoint()
+        }
+
+
+        val dMessages:RDD[(AgentId, List[Message])] = simsSpark.flatMap(_._2.getMessages).map(x => (x.receiverId, x)).combineByKey(
           (message: Message) => {
             List(message)
           },
@@ -168,6 +177,7 @@ class Simulation extends Serializable {
             l1 ::: l2
           }
         ).cache()
+
 
         // Environment answers immediatley for the next step
         val envMessages:RDD[(AgentId, List[Message])] = dMessages.filter(_._1 == ENVIRONMENT_ID).flatMap(_._2).flatMap(handleEnvMessage).map( x => (x.receiverId, x)).combineByKey(
@@ -182,15 +192,20 @@ class Simulation extends Serializable {
           }
         ).cache()
 
-        // Append environment to messages: important merge both together (groupByKey otherwise elements may be duplicated at join afterwards)
-        dMessages = dMessages.filter(_._1 != ENVIRONMENT_ID).union(envMessages).groupByKey().mapValues(_.flatten.toList)
-        dMessages = dMessages.cache()
 
-        simsSpark = simsSpark.leftOuterJoin(dMessages).mapValues{x =>
+        // Append environment to messages: important merge both together (groupByKey otherwise elements may be duplicated at join afterwards)
+        var dMessages2 = dMessages.filter(_._1 != ENVIRONMENT_ID).union(envMessages).groupByKey().mapValues(_.flatten.toList)
+        dMessages2 = dMessages2.cache()
+
+
+        simsSpark = simsSpark.leftOuterJoin(dMessages2).mapValues{x =>
           x._1.setReceiveMessages(x._2.getOrElse(List()))
           x._1
-        }.persist()
+        }.cache()
 
+        envMessages.unpersist()
+        dMessages.unpersist()
+        dMessages2.unpersist()
 
         if (!GLOBAL.silent) {
           simsSpark.foreach(_._2.stat)
