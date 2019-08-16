@@ -1,10 +1,10 @@
-package Simulation
+package simulation
 
 import java.util.UUID
 
-import Commodities.Commodity
-import Owner.{ITEM_T, Owner, SalesRecord}
-import Timeseries.Timeseries
+import old.Commodities.Commodity
+import old.Owner.{ITEM_T, Owner, SalesRecord}
+import old.timeseries.TimeseriesC
 
 
 abstract class Message extends Serializable {
@@ -50,7 +50,7 @@ case class JobFireMessage(override val senderId: AgentId, override val receiverI
 
 case class RequestMarketData(override val senderId: AgentId, override val receiverId: AgentId, item: ITEM_T) extends Message
 
-case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: Timeseries[List[SalesRecord]]) extends Message
+case class ResponseMarketData(override val senderId: AgentId, override val receiverId: AgentId, timeseries: old.timeseries.TimeseriesC[List[SalesRecord]]) extends Message
 
 // General message
 case class RequestMessageInter(override val senderId: AgentId, override val receiverId: AgentId, methodId: Int, argss: List[List[Any]]) extends Message {

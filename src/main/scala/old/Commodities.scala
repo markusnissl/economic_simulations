@@ -1,4 +1,6 @@
-package object Commodities {
+package old
+
+object Commodities {
   val Wheat       = Commodity("wheat")
   val Flour       = Commodity("flour")
   val Land        = Commodity("land")
@@ -13,7 +15,7 @@ package object Commodities {
     *
     * @param name of Commodity
     */
-  case class Commodity(name: String) extends Securities.Security {
+  case class Commodity(name: String) extends Security {
     /** Assumes price remains constant. */
     override def sample_future_price(
                                       S0           : Double,

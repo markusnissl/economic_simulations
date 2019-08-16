@@ -1,7 +1,4 @@
 import org.scalatest._
-import code._
-import code.multithreading._
-import code.multithreading.mutable._
 
 /*
 class MultiThreadingSpec extends FlatSpec {

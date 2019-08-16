@@ -1,9 +1,9 @@
-package Securities
+package old
 
 object Glob {
   val rnd = scala.util.Random
 }
-import Glob._
+import old.Glob._
 
 
 /** an investor currently "belongs" to just one security.

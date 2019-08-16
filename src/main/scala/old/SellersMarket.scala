@@ -1,9 +1,9 @@
+package old
+
 package Owner {
 
-  import Timeseries._
-  import Securities._
-  import Commodities._
-  import Simulation.{AgentId, MarketBuySellerMessage, Message}
+  import old.Commodities.Commodity
+  import simulation.AgentId
 
 
   case class SalesRecord(
@@ -65,11 +65,9 @@ package Owner {
 package Markets {
 
   import Owner._
-  import Timeseries._
-  import Securities._
-  import Commodities._
-  import Simulation.{AgentId, MarketBuyMessage, MarketBuyOrderMessage, MarketBuySellerMessage, MarketSellMessage, Message, ResponseMarketData, SimO}
-  import code.{Instruction, __forever, __do, __wait}
+  import old.Commodities.Commodity
+  import old.{MarketMatchingUtilities, MarketSelling, SimO}
+  import simulation._
 
 
   /**
@@ -86,7 +84,7 @@ package Markets {
     //Seller,Units,Price
     var goods: List[(AgentId, Int, Double)] = List()
 
-    //var order_history = new LogList[SalesRecord]
+    //var order_history = new old.LogList[SalesRecord]
 
     def copy_state_to(other: SellersMarket,
                       old2new: Seller => Seller) {

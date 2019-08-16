@@ -1,7 +1,6 @@
-package Simulation
+package old
 
 import SimLib._
-import Commodities._
 
 
 object MainExample {
@@ -12,7 +11,7 @@ object MainExample {
   //val c   = new Cinema(s);
   //val rf  = new CattleFarm(s);
   //val mcd = new McDonalds(s);
-  val landlord = new Source(Land, 20, 100000 * 100)
+  val landlord = new Source(Commodities.Land, 20, 100000 * 100)
   //val freudensprung = new Source(Beef,   100,  26000*100, s);
   //val silo          = new Source(Wheat, 1000,   6668*100, s);
   //val silo2         = new Trader(Whear, 100, s);

@@ -1,6 +1,7 @@
-package Simulation
-import code._
+package old
+
 import Owner._
+import simulation.{MarketBuySellerMessage, Message}
 
 import scala.collection.mutable.ListBuffer
 
@@ -16,7 +17,7 @@ trait Sim {
   // END state
 
   protected def algo   : Instruction
-  var algo_c : Vector[SimpleInstruction] = _
+  var algo_c : Vector[SimpleInstruction] = code.compile(algo)
 
   /** Call from the constructor in inheriting classes. */
   protected def init(start_time: T) {
@@ -37,7 +38,7 @@ trait Sim {
   /** Runs until at most time `until`. */
   def run_until(until: T) = {
     val (a, b, next_goal_time) =
-      exec[T](algo_c, current_pos, current_time, until, execStack, returnValue);
+      code.exec[T](algo_c, current_pos, current_time, until, execStack, returnValue);
 
     current_pos = a;
     current_time = b;

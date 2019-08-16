@@ -1,6 +1,7 @@
-package Simulation
+package simulation
 
-import Owner.Owner
+import old.Owner.Owner
+
 
 //TODO: make a proxy of real person and forward message
 class ReferencePerson(val owner: Owner, val id: AgentId)  extends Serializable {

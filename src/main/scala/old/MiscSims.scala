@@ -1,9 +1,8 @@
-package Simulation.SimLib
-import code._
-import _root_.Simulation.Factory._
-import Markets._
-import Commodities._
-import Simulation.{MarketRequest, MarketSellMessage, SimO, SimpleSim}
+package old
+package SimLib
+
+import old.Commodities.Commodity
+import simulation.{MarketRequest, MarketSellMessage}
 
 
 class Source(commodity: Commodity, units: Int, p: Int) extends SimO with SimpleSim {
@@ -23,7 +22,7 @@ class Source(commodity: Commodity, units: Int, p: Int) extends SimO with SimpleS
   var initC = 0
   def action = __do{
     if (initC == 0) {
-      sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, commodity))
+      sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, commodity))
       initC = 1
     } else if (initC == 1) {
       if (markets.get(commodity).isDefined) {
@@ -86,20 +85,20 @@ case class Buyer(commodity: Commodity,
 
 
 class Farm extends Factory(
-  ProductionLineSpec(1, List((Land, 1)), List(), (Wheat, 20), 4))
+  ProductionLineSpec(1, List((Commodities.Land, 1)), List(), (Commodities.Wheat, 20), 4))
 
 class Mill extends Factory(
-  ProductionLineSpec(1, List(), List((Wheat, 10)), (Flour, 10), 1))
+  ProductionLineSpec(1, List(), List((Commodities.Wheat, 10)), (Commodities.Flour, 10), 1))
 
 class Cinema extends Factory(
-  ProductionLineSpec(2, List(), List(), (MovieTicket, 2000), 1))
+  ProductionLineSpec(2, List(), List(), (Commodities.MovieTicket, 2000), 1))
 
 class CattleFarm extends Factory(
-  ProductionLineSpec(1, List((Land, 1)), List(), (Beef, 5), 6))
+  ProductionLineSpec(1, List((Commodities.Land, 1)), List(), (Commodities.Beef, 5), 6))
 
 class McDonalds extends Factory(
-  ProductionLineSpec(1, List(), List((Flour, 10), (Beef, 5)),
-                 (Burger, 10), 2))
+  ProductionLineSpec(1, List(), List((Commodities.Flour, 10), (Commodities.Beef, 5)),
+                 (Commodities.Burger, 10), 2))
 
 
 

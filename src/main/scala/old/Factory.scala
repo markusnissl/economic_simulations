@@ -1,10 +1,10 @@
-package Simulation.Factory
+package old
 
-import code._
 import Owner._
-import Commodities._
-import Simulation.{JobFireMessage, JobHireMessage, JobHiredMessage, MarketBuyMessage, MarketRequest, MarketSellMessage, Message, ReferencePerson, ResponseMarketData, Sim, SimO}
-import Timeseries.Timeseries
+import code._
+import old.Commodities.Commodity
+import simulation.{JobFireMessage, JobHireMessage, JobHiredMessage, MarketBuyMessage, MarketRequest, MarketSellMessage, Message, ReferencePerson, ResponseMarketData}
+import timeseries.TimeseriesC
 
 
 case class ProductionLineSpec(employees_needed: Int,
@@ -121,13 +121,13 @@ case class HR(private val o: Owner,
   def salary_cost():Int = salary * employees.length
 
   protected def hire_one() {
-    o.sendMessage(JobHireMessage(o.id, _root_.Simulation.ENVIRONMENT_ID))
+    o.sendMessage(JobHireMessage(o.id, _root_.simulation.ENVIRONMENT_ID))
     /*if (shared.arbeitsmarkt.length > 0)
       employees.push(shared.arbeitsmarkt.pop.asInstanceOf[Person]);*/
   }
 
   protected def fire_one() {
-    o.sendMessage(JobFireMessage(o.id, _root_.Simulation.ENVIRONMENT_ID, employees.pop.id))
+    o.sendMessage(JobFireMessage(o.id, _root_.simulation.ENVIRONMENT_ID, employees.pop.id))
     //shared.arbeitsmarkt.push(employees.pop);
   }
 
@@ -268,7 +268,7 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
     //shared.market(pls.produced._1).order_history.toTimeseries
   }
 
-  var marketData: Timeseries[List[SalesRecord]] = null
+  var marketData: TimeseriesC[List[SalesRecord]] = null
   var historyFetched = false
 
   setMessageHandler("ResponseMarketData", (m:Message) => {
@@ -278,7 +278,7 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
   })
 
   protected def tactics() = {
-    import Timeseries._;
+    import timeseries.TimeseriesP._;
 
     /* cost and price concerns disregarded -- everyone makes market orders.
        supply of consumables disregarded because we want some stability
@@ -296,9 +296,9 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
 
 
     historyFetched = false
-    def historic_demand: Timeseries[Int] = sum_grp[SalesRecord](marketData, _.num_ordered);
+    def historic_demand: TimeseriesC[Int] = sum_grp[SalesRecord](marketData, _.num_ordered);
 
-    val past_demand: Timeseries[Int] =
+    val past_demand: TimeseriesC[Int] =
       historic_demand.end_at(current_time - 1);
 
     val demand_fc: Double =
@@ -403,12 +403,12 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
       __do {
         // Get market ids from environment
         for (x <- pls.required) {
-          sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, x._1))
+          sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, x._1))
         }
         for (x <- pls.consumed) {
-          sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, x._1))
+          sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, x._1))
         }
-        sendMessage(MarketRequest(this.id, _root_.Simulation.ENVIRONMENT_ID, pls.produced._1))
+        sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, pls.produced._1))
         initC = false
       }
     ),

@@ -1,7 +1,7 @@
-package Simulation
+package old
 
-import code._
-import Commodities._
+import old.Commodities.Commodity
+import simulation._
 
 
 class Person(
@@ -17,15 +17,15 @@ class Person(
   }
 
   private val properties: Map[Commodity, Map[String, Int]] =
-    Map(Flour -> Map("calories" -> 100),
-      Burger -> Map("calories" -> 500))
+    Map(Commodities.Flour -> Map("calories" -> 100),
+      Commodities.Burger -> Map("calories" -> 500))
 
-  private val foodstuffs = List(Flour, Burger)
+  private val foodstuffs = List(Commodities.Flour, Commodities.Burger)
 
   // TODO: factor in bounded rationality: far-off rewards are to be discounted
   private def expected_enjoyment(item: Commodity): Int = {
     item match {
-      case MovieTicket => 1
+      case Commodities.MovieTicket => 1
       case _ if properties(item).contains("calories") =>
         properties(item)("calories")
       case _ => 0
@@ -55,9 +55,9 @@ class Person(
     __if(initC)(
       __do {
         initC = true
-        sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, Flour))
-        sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, Burger))
-        sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, MovieTicket))
+        sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, Commodities.Flour))
+        sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, Commodities.Burger))
+        sendMessage(MarketRequest(this.id, ENVIRONMENT_ID, Commodities.MovieTicket))
       }
     ),
     //__syncMessage(() => referencePerson.sell(10,10)),
@@ -67,7 +67,7 @@ class Person(
     __do {
 
       if (active) {
-        val food = if (GLOBAL.rnd.nextInt(2) == 0) Flour else Burger
+        val food = if (GLOBAL.rnd.nextInt(2) == 0) Commodities.Flour else Commodities.Burger
 
         happiness -= 100; // hunger
 
@@ -80,13 +80,13 @@ class Person(
         // needs to eat
         if (available(food) >= 1) consume(food, 1)
 
-        val mtmId = markets.get(MovieTicket)
+        val mtmId = markets.get(Commodities.MovieTicket)
         if (mtmId.isDefined) {
-          sendMessage(MarketBuyMessage(this.id, mtmId.get, MovieTicket, 1))
+          sendMessage(MarketBuyMessage(this.id, mtmId.get, Commodities.MovieTicket, 1))
         }
         //shared.market(MovieTicket).market_buy_order_now(shared.timer, this, 1)
         // wants entertainment
-        if (available(MovieTicket) >= 1) consume(MovieTicket, 1)
+        if (available(Commodities.MovieTicket) >= 1) consume(Commodities.MovieTicket, 1)
 
         // shared.market("miete").market_buy_order_now(shared.timer, this, 1);
       }

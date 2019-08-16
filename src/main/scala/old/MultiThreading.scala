@@ -1,3 +1,4 @@
+package old
 package code.multithreading
 
 
@@ -59,7 +60,7 @@ package immutable {
 
 
   abstract class ThreadPrecursor[T: Numeric] extends Precursor[T, Thread[T]] {
-  val prog: Vector[code.SimpleInstruction]
+  val prog: Vector[SimpleInstruction]
 
   def start(start_time: T) : Thread[T] = new Thread[T](this, start_time)
 }
@@ -142,14 +143,14 @@ package mutable {
 
 
   abstract class ThreadPrecursor[T: Numeric] extends Precursor[T, Thread[T]] {
-  val prog: Vector[code.SimpleInstruction]
+  val prog: Vector[SimpleInstruction]
 
   def start(start_time: T) : Thread[T] = new Thread[T](this, start_time)
 }
 
 
 class ConcreteThreadPrecursor[T: Numeric](
-  val prog: Vector[code.SimpleInstruction]
+  val prog: Vector[SimpleInstruction]
 ) extends ThreadPrecursor[T]
 
 

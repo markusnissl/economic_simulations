@@ -1,6 +1,6 @@
+package old
 
-package Owner {
-
+import Owner.Owner
 
 object TheBank { // Could be a Factory[Debit => Credit]
   var capital = 0;
@@ -47,6 +47,3 @@ object TheBank { // Could be a Factory[Debit => Credit]
     assets_interest_rate = loans * profit_rate / (savings - loans);
   }
 }
-
-
-} // end package Owner

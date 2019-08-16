@@ -1,8 +1,8 @@
 package ecosim.runtime
 
 
-import Simulation.{Message, RequestMessageInter, SimO}
-import code.{Instruction, __do}
+import simulation.{Message, RequestMessageInter}
+import old.{Instruction, SimO, __do}
 
 class Actor extends SimO {
   override def mycopy(): SimO = {

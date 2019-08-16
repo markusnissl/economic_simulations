@@ -1,9 +1,7 @@
 import org.scalatest._
-import Simulation._
-import Simulation.SimLib._
-import Simulation.Factory._
-import Owner._
-import Commodities._
+import simulation._
+import old.Commodities._
+import old.Factory
 
 
 class MainSpec extends FlatSpec {
@@ -30,7 +28,7 @@ class MainSpec extends FlatSpec {
 
 
   "Copying a simulation" should "work" in {
-    import Simulation.MainExample._
+    import old.MainExample._
     GLOBAL.silent = true;
     s.run(1);
     val (s2, _) = s.mycopy();

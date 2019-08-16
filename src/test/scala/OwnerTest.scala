@@ -1,6 +1,6 @@
 import org.scalatest._
-import Owner._
-import Commodities._
+import old.Commodities._
+import old.Owner.Owner
 
 
 class OwnerSpec extends FlatSpec {

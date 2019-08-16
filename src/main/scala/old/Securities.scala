@@ -1,3 +1,7 @@
+package old
+
+import Securities._
+
 package object Securities {
 
   def expectation(sample: () => Double, n: Int) : Double = {
@@ -76,10 +80,6 @@ package object Securities {
   }
 
 } // end package object Securities
-
-
-
-package Securities {
 
 
 abstract class Security {
@@ -603,9 +603,7 @@ object OptionTest {
       o.plot_price(S0, now, T, 100, 10000);
     */
   }
-} // end OptionTest
-
-} // end package Securities
+} // end OptionTest // end package Securities
 
 
 

@@ -1,6 +1,6 @@
 import org.scalatest._
-import Simulation._
-import code._
+import simulation._
+import old.{Sim, __forever, __do, __dowhile, __wait, __repeat}
 
 class XFactory extends Sim {
   init(0);

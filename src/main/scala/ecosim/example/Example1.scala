@@ -1,17 +1,10 @@
 package ecosim.example.ex1
 
-import code.{SimpleInstruction, __goto, __return}
-import ecosim.classLifting.{Actor1, Actor2, Lifter, MainClass}
 import ecosim.runtime._
-import ecosim.sim
 import ecosim.deep.{ActorType, IR}
 import IR.TopLevel._
-import _root_.Simulation.Message
 import squid.quasi.lift
-
-import scala.annotation.compileTimeOnly
-import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import simulation.Message
 
 @lift
 class Market extends Actor {
@@ -150,7 +143,7 @@ object ManualEmbedding extends App {
 
   val resultMessageCall = Variable[Any]
 
-  val p1 = Variable[_root_.Simulation.RequestMessageInter]
+  val p1 = Variable[_root_.simulation.RequestMessageInter]
   //Handle later
 
   val marketFunctions = marketSell :: marketSellB :: recursiveFunction :: Nil
@@ -296,7 +289,7 @@ object ManualEmbedding extends App {
   stepFunction(0,0,5)*/
 
   val actors = simulation.codegen()
-  val simu = new _root_.Simulation.Simulation()
+  val simu = new old.Simulation()
   simu.init(actors)
   simu.run(7)
 }

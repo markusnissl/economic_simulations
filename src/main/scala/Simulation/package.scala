@@ -1,4 +1,4 @@
-package object Simulation {
+package object simulation {
   type AgentId = Long
   type ObjectId = Long
 

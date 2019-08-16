@@ -1,14 +1,16 @@
+import old.SimpleInstruction
 import org.scalatest._
-import code._
 
 import scala.collection.mutable.ListBuffer
+import old.{__repeat, __dowhile, __do, __wait, __forever, __goto}
+import old.code._
 
 case class ExecSim(prog: Vector[SimpleInstruction]) {
   var pos  = 0
   var time = 0
 
   def exec(until: Int) : Option[Int] = {
-    val (p, t, n) = code.exec(prog, pos, time, until, ListBuffer());
+    val (p, t, n) = old.code.exec(prog, pos, time, until, ListBuffer());
     pos = p;
     time = t;
     n
@@ -20,7 +22,7 @@ case class ExecSimDouble(prog: Vector[SimpleInstruction]) {
   var time = 0.0
 
   def exec(until: Double) : Option[Double] = {
-    val (p, t, n) = code.exec[Double](prog, pos, time, until, ListBuffer());
+    val (p, t, n) = old.code.exec[Double](prog, pos, time, until, ListBuffer());
     pos = p;
     time = t;
     n

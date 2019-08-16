@@ -1,3 +1,5 @@
+package old
+
 package object Owner {
 
   import Securities._
@@ -9,11 +11,8 @@ package object Owner {
 
 package Owner {
 
-  import java.awt.TrayIcon.MessageType
-
   import Commodities.Commodity
-  import Simulation.{AgentId, Generator, MarketBuyOrderMessage, MarketBuySellerMessage, MarketResponse, Message, RequestMessageInter, TransferMoneyMessage}
-
+  import simulation.{AgentId, MarketBuyOrderMessage, MarketResponse, Message, RequestMessageInter, TransferMoneyMessage}
 
   case class BalanceSheet(
                            balance: Int,
@@ -62,7 +61,7 @@ package Owner {
       */
     var capital: Int = 0 // EUR cents
 
-    var id: AgentId = Generator.getNextAgentId
+    var id: AgentId = simulation.Generator.getNextAgentId
 
 
     //  var accounts = List[Account]()

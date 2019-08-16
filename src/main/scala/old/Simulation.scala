@@ -1,10 +1,11 @@
-package Simulation
+package old
 
 import Markets._
 import Owner._
-import Commodities._
+import old.Commodities.Commodity
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
+import simulation.{AgentId, ENVIRONMENT_ID, JobFireMessage, JobHiredMessage, MarketRequest, MarketResponse, Message}
 
 
 class Simulation extends Serializable {
@@ -125,7 +126,7 @@ class Simulation extends Serializable {
     case msg: MarketRequest => {
       List[Message](MarketResponse(ENVIRONMENT_ID, msg.senderId, msg.item, market(msg.item).id))
     }
-    case msg: JobHireMessage => {
+    case msg: JobHiredMessage => {
       if (arbeitsmarkt.nonEmpty) {
         List[Message](JobHiredMessage(ENVIRONMENT_ID, msg.senderId, arbeitsmarkt.pop()))
       } else {
@@ -247,8 +248,8 @@ class Simulation extends Serializable {
     // prevent recursive simulation. This is only safe it the simulation
     // runs for fewer than 1000 iterations!
     for (s <- new_sim.sims)
-      if (s.isInstanceOf[Factory.Factory])
-        s.asInstanceOf[Factory.Factory].prev_mgmt_action += 1000
+      if (s.isInstanceOf[Factory])
+        s.asInstanceOf[Factory].prev_mgmt_action += 1000
 
     new_sim.run(it);
     old2new

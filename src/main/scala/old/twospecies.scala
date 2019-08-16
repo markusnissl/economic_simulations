@@ -1,4 +1,6 @@
-package code
+package old
+
+import code._
 
 package object twospecies {
 import multithreading._
@@ -155,6 +157,4 @@ def experiment(
 */
 
 
-} // end package object twospecies
-
-
+}
