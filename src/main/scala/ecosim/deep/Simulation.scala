@@ -2,6 +2,7 @@ package ecosim
 package deep
 
 import IR.Predef._
+import ecosim.example.ex1.{Farmer, Market}
 
 case class Message[R](mtd: LiftedMethod[R], argss: List[List[OpenCode[_]]])
 

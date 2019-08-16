@@ -2,10 +2,7 @@ package ecosim.deep
 
 import IR.Predef._
 import squid.lib.MutVar
-import _root_.Simulation.{RequestMessageInter, ResponseMessageInter}
-import code.__wait
-
-import scala.annotation.compileTimeOnly
+import simulation.{RequestMessageInter, ResponseMessageInter}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int], actorType: ActorType[X])(implicit val X: CodeType[X]) {
@@ -157,6 +154,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
     val finalCode = this.createExec(this.actorType.self, commandsRewrite)
 
     println(finalCode)
+    println(IR.showScala(finalCode.rep))
     val f = finalCode.compile
     f
   }
@@ -288,7 +286,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
                     val receiver = ${send.actorRef};
                     val requestMessage = RequestMessageInter(sender.id, receiver.id, ${methodId}, $convertedArgs);
                     sender.sendMessage(requestMessage);
-                    sender.setMessageResponseHandler(requestMessage.sessionId, (response: _root_.Simulation.Message) => {
+                    sender.setMessageResponseHandler(requestMessage.sessionId, (response: simulation.Message) => {
                       $responseMessage := response.asInstanceOf[ResponseMessageInter[Any]]
                     })
                     $returnValue := null

@@ -117,7 +117,7 @@ object App1 extends App {
   val lifter = new Lifter()
   val simulation1 = lifter(startClasses, mainClass)
   val actors1 = simulation1.codegen()
-  val simu1 = new _root_.Simulation.Simulation()
+  val simu1 = new old.Simulation()
   simu1.init(actors1)
   simu1.run(10)
 
