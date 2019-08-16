@@ -9,31 +9,33 @@ import ecosim.runtime.Actor
 import squid.ir.RuntimeSymbols.MtdSymbol
 
 class Lifter {
-  var methodsIdMapReversed: Map[IR.MtdSymbol, Int] = Map()
-  var actorSelfVariable: Variable[_ <: Actor] = null
-  var methodsIdMap: Map[Int, IR.MtdSymbol] = Map()
+  var methodsMap: Map[Int, MethodInfo[_]] = Map()
+  var methodsIdMap: Map[IR.MtdSymbol, Int] = Map()
 
   def apply(startClasses: List[Clasz[_ <: Actor]], mainClass: Clasz[_]): ecosim.deep.Simulation = {
     var actorsInit: OpenCode[List[Actor]] = liftInitCode(mainClass)
     //Collecting method symbols to generate methodsIdMap
     var counter = 0
-    startClasses.map(c => c.methods.map(m => m.symbol)).flatten
-      .foreach(methodSym => {
-        methodsIdMap = methodsIdMap + (counter -> methodSym)
-        methodsIdMapReversed = methodsIdMapReversed + (methodSym -> counter)
-        counter += 1
+    startClasses.map(c => c.methods).flatten
+      .foreach(method => {
+        import method.A
+        import method.Scp
+        methodsIdMap = methodsIdMap + (method.symbol -> counter)
+        var blocking = true
+        if (method.A <:< codeTypeOf[NBUnit]) blocking = false
+        methodsMap = methodsMap + (counter -> new MethodInfo[method.A](method.symbol, method.tparams, method.vparams, blocking))
         counter += 1
       })
 
     val endTypes = startClasses.map(c => {
       liftActor(c)
     })
-    ecosim.deep.Simulation(endTypes, actorsInit, methodsIdMap)
+    ecosim.deep.Simulation(endTypes, actorsInit, methodsIdMap, methodsMap)
   }
 
   def liftActor[T <: ecosim.runtime.Actor](clasz: Clasz[T]) = {
     import clasz.C
-    actorSelfVariable = clasz.self.asInstanceOf[Variable[T]]
+    val actorSelfVariable: Variable[_ <: Actor] = clasz.self.asInstanceOf[Variable[T]]
     var endStates: List[State[_]] = List()
     //TODO check if this works well, seems like theres something wrong with the type of created states
     endStates = clasz.fields.map(field => {
@@ -41,25 +43,25 @@ class Lifter {
       import field.A
       State(field.symbol, field.init)
     })
-    var endMethods: List[Method[_, _]] = List()
+    var endMethods: List[LiftedMethod[_]] = List()
     var mainAlgo: Algo[Unit] = Forever(Wait(code"1"))
-    clasz.methods.map(method => {
+    clasz.methods.foreach(method => {
       val cde = method.body
       //TODO check if theres no input parameters
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
-        val algo = liftCode(cde)
+        val algo = liftCode(cde, actorSelfVariable)
         if (algo.tpe <:< codeTypeOf[Unit]){
-          mainAlgo = liftCode(cde).asInstanceOf[Algo[Unit]]
+          mainAlgo = liftCode(cde, actorSelfVariable).asInstanceOf[Algo[Unit]]
         } else {
           //TODO: else, throw an exception? or make it so that main in deep.Simulation can be of type Algo[Any]
           println("Warning! Main method of class " + clasz.name + " has a return value")
         }
       
       } else {
-        val mtdBody = liftCode(cde)
-        val params = method.vparams.flatten
-        //TODO fix the input parameters of the method body
-        endMethods = LocalMethod(IR.MtdSymbol(method.symbol), (par1: Variable[Int]) => mtdBody ):: endMethods
+        val mtdBody = liftCode(cde, actorSelfVariable)
+        endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(methodsIdMap(method.symbol)).blocking) {
+          override val mtd: cls.Method[Any, cls.Scp] = method.asInstanceOf[this.cls.Method[Any,cls.Scp]]
+        }) :: endMethods
       }
     })
     ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
@@ -77,43 +79,39 @@ class Lifter {
     }
   }
 
-  def liftCode[T: CodeType](cde: OpenCode[T]): Algo[T] = {
+  def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor]): Algo[T] = {
 //    base.debugFor(
     cde match {
       case code"val $x: $xt = $v; $rest: T" =>
-        LetBinding(Some(x), liftCode(v), liftCode(rest))
+        LetBinding(Some(x), liftCode(v, actorSelfVariable), liftCode(rest, actorSelfVariable))
       case code"$e; $rest: T" =>
-        LetBinding(None, liftCode(e), liftCode(rest))
+        LetBinding(None, liftCode(e, actorSelfVariable), liftCode(rest, actorSelfVariable))
       case code"($x: List[$tb]).foreach[$ta](($y: tb) => $foreachbody)" =>
-        val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()"))
+        val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()", actorSelfVariable))
         f.asInstanceOf[Algo[T]]
       case code"while(true) $body" =>
-        val f = Forever(liftCode(body))
+        val f = Forever(liftCode(body, actorSelfVariable))
         f.asInstanceOf[Algo[T]]
-      case code"SpecialOperations.waitTurns($x)" =>
+      case code"SpecialInstructions.waitTurns($x)" =>
         val f = Wait(x)
         f.asInstanceOf[Algo[T]]
-//      case code"${MethodApplication(ma)}:Any" if ma.symbol.asMethodSymbol.name.toString() == "waitTurns" =>
-//        val f = Wait(code"1")
-//        f.asInstanceOf[Algo[T]]
-      case code"${MethodApplication(ma)}:Any" if methodsIdMapReversed.get(ma.symbol).isDefined =>
+      case code"${MethodApplication(ma)}:Any" if methodsIdMap.get(ma.symbol).isDefined =>
+        //extracting arguments and formatting them
+        val argss = ma.args.tail.map(args => args.toList.map(arg => code"$arg")).toList
         //method is local
-        if(actorSelfVariable == ma.args(0)(0)) {
-          //TODO generate CallMethodC
-          //CallMethodC(code"$methodsIdMap[ma.symbol]", code"bro")
-          null
+        val recipientActorVariable = ma.args.head.head.asInstanceOf[OpenCode[Actor]]
+        if(actorSelfVariable == recipientActorVariable) {
+          CallMethod(methodsIdMap(ma.symbol), argss)
         }
-        //method includes another agent
+        //method recipient is another actor
         else {
-          //TODO generate Send
-          //Send(null, null, null)
-          null
+          Send(actorSelfVariable.toCode, recipientActorVariable, Message(methodsIdMap(ma.symbol), argss))
         }
       case _ =>
         //TODO check if inside a scala code, there is one of the supported operations(e.g. if the body of 'if' contains a foreach)
-        cde analyse {
-          case d => println(d)
-        }
+//        cde analyse {
+//          case d => println(d)
+//        }
         ScalaCode(cde)
     }
 //    )
