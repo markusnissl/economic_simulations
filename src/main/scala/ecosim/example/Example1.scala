@@ -3,6 +3,7 @@ package ecosim.example.ex1
 import ecosim.runtime._
 import ecosim.deep.{ActorType, IR}
 import IR.TopLevel._
+import ecosim.classLifting.{MethodInfo, NBUnit}
 import squid.quasi.lift
 import simulation.Message
 
