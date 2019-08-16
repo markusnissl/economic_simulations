@@ -2,51 +2,46 @@ package ecosim
 package deep
 
 import IR.Predef._
-import code.{SimpleInstruction, __return}
-import ecosim.deep.Interpreter.Assignment
 
-import scala.collection.mutable.ListBuffer
-import squid.lib.MutVar
-
-case class Message[A,R](mtd: NonLocalMethod[A,R], arg: OpenCode[A])
+case class Message[R](mtd: LiftedMethod[R], argss: List[List[OpenCode[_]]])
 
 sealed abstract class Algo[A](implicit val tpe: CodeType[A])
 case class Forever(body: Algo[_]) extends Algo[Unit]
 case class Wait(cde: OpenCode[Int]) extends Algo[Unit]
-case class CallMethod[E, R: CodeType](sym: IR.MtdSymbol, arg: OpenCode[E])(implicit val E: CodeType[E]) extends Algo[R]
-case class CallMethodC[E, R: CodeType](methodId: OpenCode[Int], arg: OpenCode[E])(implicit val E: CodeType[E]) extends Algo[R]
-case class Send[E,R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: Message[E,R])(implicit val E: CodeType[E], implicit val R:CodeType[R]) extends Algo[R]
+case class CallMethodDebug[R: CodeType](sym: IR.MtdSymbol, argss: List[List[OpenCode[_]]]) extends Algo[R]
+case class CallMethod[R: CodeType](methodId: Int, argss: List[List[OpenCode[_]]]) extends Algo[R]
+case class Send[R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: Message[R])(implicit val R:CodeType[R]) extends Algo[R]
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
-case class If(cond: OpenCode[Boolean], body:Algo[Unit]) extends Algo[Unit]
-
-/***
-  * used for both bindings and sequences of Algos
-  */
+case class NoOp() extends Algo[Any]
+case class If[A](cond: OpenCode[Boolean], body:Algo[A])(implicit val A: CodeType[A]) extends Algo[A]
+case class IfElse[A](cond: OpenCode[Boolean], ifBody:Algo[A], elseBody:Algo[A])(implicit val A: CodeType[A]) extends Algo[A]
 case class LetBinding[V: CodeType, A: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
 
-sealed abstract class Method[A,R](implicit val A: CodeType[A]) {
-  val sym: IR.MtdSymbol
-  val body: Variable[A] => Algo[R]
+abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], val body: Algo[R], val blocking: Boolean) {
+  def sym: IR.MtdSymbol = mtd.symbol
+  val mtd: cls.Method[R, cls.Scp]
+
+
   override def hashCode() = sym.hashCode()
   override def equals(that: Any) = that match {
-    case that: Method[_,_] => that.sym === sym
+    case that: LiftedMethod[_] => that.sym === sym
   }
   override def toString = s"${sym.asMethodSymbol.owner.name}.${sym.asMethodSymbol.name}"
+
 }
-case class LocalMethod[A,R](sym: IR.MtdSymbol, body: Variable[A] => Algo[R])(implicit override val A: CodeType[A]) extends Method[A,R]
-sealed abstract class NonLocalMethod[A,R](implicit override val A: CodeType[A]) extends Method[A,R]
-case class BlockingMethod[A,R](sym: IR.MtdSymbol, body: Variable[A] => Algo[R])(implicit override val A: CodeType[A]) extends NonLocalMethod[A,R]
-case class NonBlockingMethod[A](sym: IR.MtdSymbol, body: Variable[A] => Algo[Unit])(implicit override val A: CodeType[A]) extends NonLocalMethod[A,Unit]
+
+
 
 //case class State[A: CodeType](sym: IR.MtdSymbol, init: OpenCode[A])
 case class State[A](sym: IR.MtdSymbol, init: OpenCode[A])(implicit val tpe: CodeType[A]) {
   override def toString = s"var ${sym.asMethodSymbol.owner.name}.${sym.asMethodSymbol.name}"
 }
 
-case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], methods: List[Method[_,_]], main: Algo[Unit], self: Variable[X])(implicit val X:CodeType[X]){
+case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], methods: List[LiftedMethod[_]], main: Algo[Unit], self: Variable[X])(implicit val X:CodeType[X]){
 
-  private def compileMethod[A](method: Method[A,_], args:ListBuffer[Assignment[_]], methodIdMapping: Map[Int, IR.MtdSymbol]): (Variable[_], Vector[SimpleInstruction]) = {
+  private var stepFunction: (X) => (Int, Int, Int) => (Int, Int) = _
+  /*private def compileMethod[A](method: LiftedMethod[_], args:ListBuffer[Assignment[_]], methodIdMapping: Map[Int, IR.MtdSymbol]): (Variable[_], Vector[SimpleInstruction]) = {
     import method.A
     val methodArgs = Variable[A];
     val methodAlgo = method.body(methodArgs)
@@ -73,19 +68,23 @@ case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], me
     code = code ++ main
 
     (pos, code )
-  }
+  }*/
 
   // Just for testing at the moment
-  def codegen(selfRef: X, methodIdMapping: Map[Int, IR.MtdSymbol]): (Int, Int, Int) => (Int, Int) = {
+  def codegen(methodIdMapping: Map[IR.MtdSymbol, Int]): Unit = {
     val cg = new Codegen[X](methodIdMapping, this)
-    cg.compile(selfRef)
+    stepFunction = cg.compile
+  }
+
+  def getStepFunction(actor: X): (Int, Int, Int) => (Int, Int) = {
+    stepFunction(actor)
   }
 
 }
 
-case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]], methodIdMapping: Map[Int, IR.MtdSymbol]) {
+case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]], methodIdMapping: Map[IR.MtdSymbol, Int]) {
 
-  def compile(): List[runtime.Actor] = {
+  /*def compile(): List[runtime.Actor] = {
     val actors = this.init.unsafe_asClosedCode.run
     actors.foreach(a => {
       val actorTypeSearch = actorTypes.find(_.name == a.getClass.getSimpleName)
@@ -107,9 +106,12 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
     })
 
     actors
-  }
+  }*/
 
   def codegen(): List[runtime.Actor] = {
+    //Generate step function of actorTypes
+    actorTypes.foreach(_.codegen(methodIdMapping))
+
     val actors = this.init.unsafe_asClosedCode.run
     actors.foreach(a => {
       val actorTypeSearch = actorTypes.find(_.name == a.getClass.getSimpleName)
@@ -122,13 +124,11 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
       actorType match {
         case aT:ActorType[c] => {
           import aT.X
-          a.stepFunction = actorType.asInstanceOf[ActorType[c]].codegen(a.asInstanceOf[c], methodIdMapping)
+          a.stepFunction = actorType.asInstanceOf[ActorType[c]].getStepFunction(a.asInstanceOf[c])
           a.useStepFunction = true
         }
 
       }
-
-
     })
 
     actors

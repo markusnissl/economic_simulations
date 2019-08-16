@@ -266,8 +266,8 @@ package Owner {
     }
 
     //For interpreter stufff
-    final def getRequestMessages: List[RequestMessageInter[Any,Unit]] = {
-      this.receivedMessages.filter(_.isInstanceOf[RequestMessageInter[Any, Unit]]).map(_.asInstanceOf[RequestMessageInter[Any,Unit]])
+    final def getRequestMessages: List[RequestMessageInter] = {
+      this.receivedMessages.filter(_.isInstanceOf[RequestMessageInter]).map(_.asInstanceOf[RequestMessageInter])
     }
 
     /**

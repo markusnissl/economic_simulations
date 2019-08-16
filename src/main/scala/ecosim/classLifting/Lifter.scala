@@ -22,6 +22,7 @@ class Lifter {
         methodsIdMap = methodsIdMap + (counter -> methodSym)
         methodsIdMapReversed = methodsIdMapReversed + (methodSym -> counter)
         counter += 1
+        counter += 1
       })
 
     val endTypes = startClasses.map(c => {
@@ -53,7 +54,7 @@ class Lifter {
           //TODO: else, throw an exception? or make it so that main in deep.Simulation can be of type Algo[Any]
           println("Warning! Main method of class " + clasz.name + " has a return value")
         }
-
+      
       } else {
         val mtdBody = liftCode(cde)
         val params = method.vparams.flatten
