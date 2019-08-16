@@ -1,5 +1,5 @@
 package ecosim.classLifting
 
-object SpecialOperations {
+object SpecialInstructions {
   def waitTurns(turns: Int) = turns
 }

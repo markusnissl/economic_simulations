@@ -4,7 +4,8 @@ package deep
 import IR.Predef._
 import ecosim.example.ex1.{Farmer, Market}
 
-case class Message[R](mtd: LiftedMethod[R], argss: List[List[OpenCode[_]]])
+case class Message[R](methodId: Int, argss: List[List[OpenCode[_]]])
+case class MessageDebug[R](sym: IR.MtdSymbol, argss: List[List[OpenCode[_]]])
 
 sealed abstract class Algo[A](implicit val tpe: CodeType[A])
 case class Forever(body: Algo[_]) extends Algo[Unit]
@@ -12,6 +13,7 @@ case class Wait(cde: OpenCode[Int]) extends Algo[Unit]
 case class CallMethodDebug[R: CodeType](sym: IR.MtdSymbol, argss: List[List[OpenCode[_]]]) extends Algo[R]
 case class CallMethod[R: CodeType](methodId: Int, argss: List[List[OpenCode[_]]]) extends Algo[R]
 case class Send[R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: Message[R])(implicit val R:CodeType[R]) extends Algo[R]
+case class SendDebug[R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: MessageDebug[R])(implicit val R:CodeType[R]) extends Algo[R]
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit]
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
 case class NoOp() extends Algo[Any]
@@ -72,8 +74,8 @@ case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], me
   }*/
 
   // Just for testing at the moment
-  def codegen(methodIdMapping: Map[IR.MtdSymbol, Int]): Unit = {
-    val cg = new Codegen[X](methodIdMapping, this)
+  def codegen(methodIdMapping: Map[IR.MtdSymbol, Int], methodMapping: Map[Int, ecosim.classLifting.MethodInfo[_]]): Unit = {
+    val cg = new Codegen[X](methodIdMapping, this, methodMapping)
     stepFunction = cg.compile
   }
 
@@ -83,7 +85,7 @@ case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], me
 
 }
 
-case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]], methodIdMapping: Map[IR.MtdSymbol, Int]) {
+case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtime.Actor]], methodIdMapping: Map[IR.MtdSymbol, Int], methodMapping: Map[Int, ecosim.classLifting.MethodInfo[_]]) {
 
   /*def compile(): List[runtime.Actor] = {
     val actors = this.init.unsafe_asClosedCode.run
@@ -111,7 +113,7 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
 
   def codegen(): List[runtime.Actor] = {
     //Generate step function of actorTypes
-    actorTypes.foreach(_.codegen(methodIdMapping))
+    actorTypes.foreach(_.codegen(methodIdMapping, methodMapping))
 
     val actors = this.init.unsafe_asClosedCode.run
     actors.foreach(a => {

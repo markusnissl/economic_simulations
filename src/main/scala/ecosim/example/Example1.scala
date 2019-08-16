@@ -206,10 +206,10 @@ object ManualEmbedding extends App {
     Foreach[Farmer, Unit](
       code"$farmerSelf.peers",
       p2,
-      Send[Unit](
+      SendDebug[Unit](
         code"$farmerSelf",
         code"$p2",
-        Message(tell, List(List(code"$farmerSelf", code"$farmerSelf.happiness")))
+        MessageDebug(tell.sym, List(List(code"$farmerSelf", code"$farmerSelf.happiness")))
       )
     ),
     false) {
@@ -223,7 +223,7 @@ object ManualEmbedding extends App {
     tell :: nofifyPeers :: Nil,
     Forever(
       LetBinding(None,
-        LetBinding[Int, Unit](Option(testResult), Send[Int](code"$farmerSelf", code"$farmerSelf.market", Message(marketSellB, List(List(code"500")))), ScalaCode(code"""println("TEST_VAR",$testResult)""")),
+        LetBinding[Int, Unit](Option(testResult), SendDebug[Int](code"$farmerSelf", code"$farmerSelf.market", MessageDebug(marketSellB.sym, List(List(code"500")))), ScalaCode(code"""println("TEST_VAR",$testResult)""")),
         Wait(code"1")
       )
     ),
@@ -232,17 +232,20 @@ object ManualEmbedding extends App {
   val actorTypes: List[ActorType[_]] = market :: farmer :: Nil
 
   var methodIdMapping: Map[IR.MtdSymbol, Int] = Map()
-
+  var methodMapping: Map[Int, ecosim.classLifting.MethodInfo[_]] = Map()
 
   for (a <- actorTypes) {
     var counter = 0
     for (m <- a.methods) {
       methodIdMapping = methodIdMapping + (m.sym -> counter)
+      var blocking = true
+      if (m.mtd.A <:< codeTypeOf[NBUnit]) blocking = false
+      methodMapping = methodMapping + (counter -> new MethodInfo[m.mtd.A](m.sym, m.mtd.tparams, m.mtd.vparams, blocking))
       counter = counter + 1
     }
   }
 
-  val simulation = Simulation(actorTypes, code"val m = new Market; List(m, new Farmer(m))", methodIdMapping)
+  val simulation = Simulation(actorTypes, code"val m = new Market; List(m, new Farmer(m))", methodIdMapping, methodMapping)
 
   //val actors = simulation.compile()
 

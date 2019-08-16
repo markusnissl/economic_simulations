@@ -5,7 +5,7 @@ import squid.lib.MutVar
 import simulation.{RequestMessageInter, ResponseMessageInter}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int], actorType: ActorType[X])(implicit val X: CodeType[X]) {
+class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int], actorType: ActorType[X], methodMapping: Map[Int, ecosim.classLifting.MethodInfo[_]])(implicit val X: CodeType[X]) {
 
   case class VarWrapper[C](val from: Variable[C], val to: Variable[MutVar[C]])(implicit val A: CodeType[C])
   case class VarValue[C](val variable: Variable[C], val init: OpenCode[C])(implicit val A: CodeType[C])
@@ -270,7 +270,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
       case send: Send[c] => {
         import send.R
         //code"${msg.mtd.sym}"
-        val methodId = Const(methodIdMapping(send.msg.mtd.sym))
+        val methodId = Const(send.msg.methodId)
 
         val initCodeO:OpenCode[List[List[Any]]]=code"Nil"
         //Convert args, so that the can be used inside of generated codes
@@ -306,7 +306,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
                        ()"""
 
 
-        if (send.msg.mtd.blocking) {
+        if (methodMapping.get(send.msg.methodId).get.blocking) {
           merger.append((true, true))
           merger.append((true, false))
           merger.append((true, false))
@@ -316,6 +316,9 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
           merger.append((true, true))
           List(f1)
         }
+      }
+      case SendDebug(actorFrom, actorRef, msg) => {
+        createCodeLogic(Send(actorFrom, actorRef, new Message(methodIdMapping(msg.sym), msg.argss)))
       }
       case CallMethod(methodId, argss) => {
         //What we have to do:
