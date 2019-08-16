@@ -9,68 +9,78 @@ import ecosim.runtime.Actor
 import squid.ir.RuntimeSymbols.MtdSymbol
 
 class Lifter {
-  def liftActor[T <: ecosim.runtime.Actor](clasz: Clasz[T])= {
-    import clasz.C
+  var methodsIdMapReversed: Map[IR.MtdSymbol, Int] = Map()
+  var actorSelfVariable: Variable[_ <: Actor] = null
+  var methodsIdMap: Map[Int, IR.MtdSymbol] = Map()
 
-      var endStates: List[State[_]] = List()
-      //TODO check if this works well, seems like theres something wrong with the type of created states
-      clasz.fields.foreach(field => {
-        //TODO ask if this is a correct way to instantiate a state symbol, also goes for method symbols later in the code
-        endStates = State(IR.MtdSymbol(field.symbol), field.init) :: endStates
+  def apply(startClasses: List[Clasz[_ <: Actor]], mainClass: Clasz[_]): ecosim.deep.Simulation = {
+    var actorsInit: OpenCode[List[Actor]] = liftInitCode(mainClass)
+    //Collecting method symbols to generate methodsIdMap
+    var counter = 0
+    startClasses.map(c => c.methods.map(m => m.symbol)).flatten
+      .foreach(methodSym => {
+        methodsIdMap = methodsIdMap + (counter -> methodSym)
+        methodsIdMapReversed = methodsIdMapReversed + (methodSym -> counter)
+        counter += 1
       })
-      var endMethods: List[Method[_, _]] = List()
-      var mainAlgo: Algo[Unit] = Forever(Wait(code"1"))
-      clasz.methods.map(method => {
-        val cde = method.body
-        //TODO: give a better way to label the main loop method
-        if (method.symbol.asMethodSymbol.name.toString() == "loop") {
-          val algo = liftCode(cde)
-          //TODO: fix this, the check doesn't work
-          if (algo.isInstanceOf[Algo[Unit]])
-            mainAlgo = liftCode(cde).asInstanceOf[Algo[Unit]]
-          //TODO: else, throw an exception? or make it so that main in deep.Simulation can be of type Algo[Any]
+
+    val endTypes = startClasses.map(c => {
+      liftActor(c)
+    })
+    ecosim.deep.Simulation(endTypes, actorsInit, methodsIdMap)
+  }
+
+  def liftActor[T <: ecosim.runtime.Actor](clasz: Clasz[T]) = {
+    import clasz.C
+    actorSelfVariable = clasz.self.asInstanceOf[Variable[T]]
+    var endStates: List[State[_]] = List()
+    //TODO check if this works well, seems like theres something wrong with the type of created states
+    endStates = clasz.fields.map(field => {
+      //DOESNT WORK, might need to give its type
+      import field.A
+      State(field.symbol, field.init)
+    })
+    var endMethods: List[Method[_, _]] = List()
+    var mainAlgo: Algo[Unit] = Forever(Wait(code"1"))
+    clasz.methods.map(method => {
+      val cde = method.body
+      //TODO check if theres no input parameters
+      if (method.symbol.asMethodSymbol.name.toString() == "main") {
+        val algo = liftCode(cde)
+        if (algo.tpe <:< codeTypeOf[Unit]){
+          mainAlgo = liftCode(cde).asInstanceOf[Algo[Unit]]
         } else {
-          val mtdBody = liftCode(cde)
-          val params = method.vparams.flatten
-          //TODO fix the input parameters of the method body
-          endMethods = LocalMethod(IR.MtdSymbol(method.symbol), (par1: Variable[Int]) => mtdBody ):: endMethods
+          //TODO: else, throw an exception? or make it so that main in deep.Simulation can be of type Algo[Any]
+          println("Warning! Main method of class " + clasz.name + " has a return value")
         }
-      })
-    (ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]]), endMethods)
+
+      } else {
+        val mtdBody = liftCode(cde)
+        val params = method.vparams.flatten
+        //TODO fix the input parameters of the method body
+        endMethods = LocalMethod(IR.MtdSymbol(method.symbol), (par1: Variable[Int]) => mtdBody ):: endMethods
+      }
+    })
+    ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
   }
 
   def liftInitCode(clasz: Clasz[_]): OpenCode[List[Actor]] = {
+    val initMethod = clasz.methods.head
     val initCode = clasz.methods.head.body
-    //TODO fix this, the check doesn't work
-    if (initCode.isInstanceOf[OpenCode[List[Actor]]])
+    if (initMethod.A <:< codeTypeOf[List[Actor]])
       initCode.asInstanceOf[OpenCode[List[Actor]]]
     //TODO else throw an exception?
     else {
+      println("Warning! The main method does not return a list of actors. The Simulation will start without actors")
       code"List[Actor]()"
     }
-  }
-  def apply(startClasses: List[Clasz[_ <: Actor]], mainClass: Clasz[_]): ecosim.deep.Simulation = {
-    var actorsInit: OpenCode[List[Actor]] = liftInitCode(mainClass)
-    var methodsIdMap: Map[Int, ecosim.deep.IR.MtdSymbol] = Map()
-    var counter = 0
-    val endTypesMethods = startClasses.map(c => {
-      liftActor(c)
-    })
-    var endTypes = endTypesMethods.foldRight(List[ActorType[_]]())((a, endTypes) => a._1 :: endTypes)
-    endTypesMethods.foreach(typeMethods => {
-      typeMethods._2.foreach(method => {
-        methodsIdMap = methodsIdMap + (counter -> method.sym)
-        counter += 1
-      })
-    })
-    ecosim.deep.Simulation(endTypes, actorsInit, methodsIdMap)
   }
 
   def liftCode[T: CodeType](cde: OpenCode[T]): Algo[T] = {
 //    base.debugFor(
     cde match {
       case code"val $x: $xt = $v; $rest: T" =>
-        LetBinding(Some(x), ScalaCode(v), liftCode(rest))
+        LetBinding(Some(x), liftCode(v), liftCode(rest))
       case code"$e; $rest: T" =>
         LetBinding(None, liftCode(e), liftCode(rest))
       case code"($x: List[$tb]).foreach[$ta](($y: tb) => $foreachbody)" =>
@@ -79,20 +89,31 @@ class Lifter {
       case code"while(true) $body" =>
         val f = Forever(liftCode(body))
         f.asInstanceOf[Algo[T]]
-      case code"${MethodApplication(ma)}:Any" if ma.symbol.asMethodSymbol.name.toString() == "waitTurns" =>
-        val f = Wait(code"1")
+      case code"SpecialOperations.waitTurns($x)" =>
+        val f = Wait(x)
         f.asInstanceOf[Algo[T]]
-      //TODO method calls, and message sending
-      //TODO check if inside a scala code, there is one of the supported operations(e.g. if the body of 'if' contains a foreach)
-//      case code"${MethodApplication(ma)}:Any" => println(ma.args); null
-//      case code"($x: Actor1).$met($y: Int)" =>
-//        println(x)
-//        null
-//        println(obj)
-//        println(meth)
-//        println(params)
-//        ScalaCode(cde)
-      case _ => ScalaCode(cde)
+//      case code"${MethodApplication(ma)}:Any" if ma.symbol.asMethodSymbol.name.toString() == "waitTurns" =>
+//        val f = Wait(code"1")
+//        f.asInstanceOf[Algo[T]]
+      case code"${MethodApplication(ma)}:Any" if methodsIdMapReversed.get(ma.symbol).isDefined =>
+        //method is local
+        if(actorSelfVariable == ma.args(0)(0)) {
+          //TODO generate CallMethodC
+          //CallMethodC(code"$methodsIdMap[ma.symbol]", code"bro")
+          null
+        }
+        //method includes another agent
+        else {
+          //TODO generate Send
+          //Send(null, null, null)
+          null
+        }
+      case _ =>
+        //TODO check if inside a scala code, there is one of the supported operations(e.g. if the body of 'if' contains a foreach)
+        cde analyse {
+          case d => println(d)
+        }
+        ScalaCode(cde)
     }
 //    )
   }
@@ -105,7 +126,11 @@ class Lifter {
 //      f.asInstanceOf[Algo[T]]
 
 object App1 extends App {
-  //TODO: ask how to know which subtype of Clasz to use, and how to find all of the annotaded classes
+//  val a = code"List(1,2,3).foreach(x => println(x))"
+//  a.analyse {
+//    case c => println(c)
+//  }
+
   val cls1: ClassWithObject[Actor1] = Actor1.reflect(IR)
   val cls2: ClassWithObject[Actor2] = Actor2.reflect(IR)
   val cls3: ClassWithObject[MainClass] = MainClass.reflect(IR)

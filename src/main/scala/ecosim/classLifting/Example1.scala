@@ -11,16 +11,13 @@ class MainClass {
   }
 }
 
-case class Other() {
+@lift
+class Actor2 extends Actor {
   def met2(par1: String) = {
     println(par1)
   }
-}
-
-@lift
-class Actor2 extends Actor {
   def sell() = println("i sell stuff")
-  def loop() = {
+  def main() = {
     while(true){
       sell()
       SpecialOperations.waitTurns(1)
@@ -35,15 +32,15 @@ class Actor1 extends Actor {
   var c = 10
   var g = "string"
   val map = collection.mutable.Map[Int,Int]()
-  var other = Other()
-  def loop() = {
+  var actor2 = new Actor2()
+  def main() = {
     while(true) {
-      met1(1,1)
+      actor2.sell()
       SpecialOperations.waitTurns(3)
     }
   }
   def met2(figure: Int) = if (3 == 3) println("PRINTING 3")
-  def met3(): String = {other.met2("afk"); "afk"}
+  def met3(): String = {actor2.met2("afk"); "afk"}
   def met1(par1: Int, par2: Int) = {
     println("whoa")
     3
