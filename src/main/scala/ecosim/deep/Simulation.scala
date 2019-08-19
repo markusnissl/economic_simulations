@@ -41,7 +41,7 @@ case class State[A](sym: IR.MtdSymbol, init: OpenCode[A])(implicit val tpe: Code
   override def toString = s"var ${sym.asMethodSymbol.owner.name}.${sym.asMethodSymbol.name}"
 }
 
-case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], methods: List[LiftedMethod[_]], main: Algo[Unit], self: Variable[X])(implicit val X:CodeType[X]){
+case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], methods: List[LiftedMethod[_]], main: Algo[_], self: Variable[X])(implicit val X:CodeType[X]){
 
   private var stepFunction: (X) => (Int, Int, Int) => (Int, Int) = _
   /*private def compileMethod[A](method: LiftedMethod[_], args:ListBuffer[Assignment[_]], methodIdMapping: Map[Int, IR.MtdSymbol]): (Variable[_], Vector[SimpleInstruction]) = {

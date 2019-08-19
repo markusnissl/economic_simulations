@@ -44,19 +44,12 @@ class Lifter {
       State(field.symbol, field.init)
     })
     var endMethods: List[LiftedMethod[_]] = List()
-    var mainAlgo: Algo[Unit] = Forever(Wait(code"1"))
+    var mainAlgo: Algo[_] = Forever(Wait(code"1"))
     clasz.methods.foreach(method => {
       val cde = method.body
       //TODO check if theres no input parameters
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
-        val algo = liftCode(cde, actorSelfVariable)
-        if (algo.tpe <:< codeTypeOf[Unit]){
-          mainAlgo = liftCode(cde, actorSelfVariable).asInstanceOf[Algo[Unit]]
-        } else {
-          //TODO: else, throw an exception? or make it so that main in deep.Simulation can be of type Algo[Any]
-          println("Warning! Main method of class " + clasz.name + " has a return value")
-        }
-      
+        mainAlgo = liftCode(cde, actorSelfVariable)
       } else {
         val mtdBody = liftCode(cde, actorSelfVariable)
         endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(methodsIdMap(method.symbol)).blocking) {
@@ -72,25 +65,31 @@ class Lifter {
     val initCode = clasz.methods.head.body
     if (initMethod.A <:< codeTypeOf[List[Actor]])
       initCode.asInstanceOf[OpenCode[List[Actor]]]
-    //TODO else throw an exception?
     else {
-      println("Warning! The main method does not return a list of actors. The Simulation will start without actors")
+      throw new Exception("The main method does not return a list of actors")
       code"List[Actor]()"
     }
   }
 
   def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor]): Algo[T] = {
-//    base.debugFor(
     cde match {
       case code"val $x: $xt = $v; $rest: T" =>
-        LetBinding(Some(x), liftCode(v, actorSelfVariable), liftCode(rest, actorSelfVariable))
+        val f = LetBinding(Some(x), liftCode(v, actorSelfVariable), liftCode(rest, actorSelfVariable))
+        f.asInstanceOf[Algo[T]]
       case code"$e; $rest: T" =>
-        LetBinding(None, liftCode(e, actorSelfVariable), liftCode(rest, actorSelfVariable))
+        val f = LetBinding(None, liftCode(e, actorSelfVariable), liftCode(rest, actorSelfVariable))
+        f.asInstanceOf[Algo[T]]
       case code"($x: List[$tb]).foreach[$ta](($y: tb) => $foreachbody)" =>
         val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()", actorSelfVariable))
         f.asInstanceOf[Algo[T]]
       case code"while(true) $body" =>
         val f = Forever(liftCode(body, actorSelfVariable))
+        f.asInstanceOf[Algo[T]]
+      case code"if($cond: Boolean) $ifBody:T else $elseBody: T" if elseBody != code"()" =>
+        val f = IfElse(cond, liftCode(ifBody, actorSelfVariable), liftCode(elseBody, actorSelfVariable))
+        f.asInstanceOf[Algo[T]]
+      case code"if($cond: Boolean) $body:T" =>
+        val f = If(cond, liftCode(body, actorSelfVariable))
         f.asInstanceOf[Algo[T]]
       case code"SpecialInstructions.waitTurns($x)" =>
         val f = Wait(x)
@@ -101,18 +100,26 @@ class Lifter {
         //method is local
         val recipientActorVariable = ma.args.head.head.asInstanceOf[OpenCode[Actor]]
         if(actorSelfVariable == recipientActorVariable) {
-          CallMethod(methodsIdMap(ma.symbol), argss)
+          val f = CallMethod(methodsIdMap(ma.symbol), argss)
+          f.asInstanceOf[Algo[T]]
         }
         //method recipient is another actor
         else {
-          Send(actorSelfVariable.toCode, recipientActorVariable, Message(methodsIdMap(ma.symbol), argss))
+          val f = Send(actorSelfVariable.toCode, recipientActorVariable, Message(methodsIdMap(ma.symbol), argss))
+          f.asInstanceOf[Algo[T]]
         }
       case _ =>
-        //TODO check if inside a scala code, there is one of the supported operations(e.g. if the body of 'if' contains a foreach)
-//        cde analyse {
-//          case d => println(d)
-//        }
-        ScalaCode(cde)
+        //TODO write a better exception message
+        cde analyse {
+          case d if d != cde =>
+            val c = liftCode(d, actorSelfVariable)
+            c match {
+              case scalacode: ScalaCode[_] =>
+              case _ => throw new Exception("Unsupported code inside " + cde)
+            }
+        }
+        val f = ScalaCode(cde)
+        f.asInstanceOf[Algo[T]]
     }
 //    )
   }
