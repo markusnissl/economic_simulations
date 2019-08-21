@@ -1,0 +1,122 @@
+package ecosim.runtime
+
+import java.util.UUID
+
+object Actor {
+  type AgentId = Long
+  var lastAgentId: AgentId = 0
+
+  /**
+    * Generates a new id for an agent and returns it
+    *
+    * @return id for an agent
+    */
+  def getNextAgentId: AgentId = {
+    lastAgentId = lastAgentId + 1
+    lastAgentId
+  }
+
+}
+
+abstract class Message extends Serializable {
+  val senderId: Actor.AgentId
+  val receiverId: Actor.AgentId
+  var sessionId: String = UUID.randomUUID().toString
+
+  override def toString: String = {
+    "Message: " + senderId + " -> " + receiverId + "(" + sessionId + ")"
+  }
+}
+
+// General message
+case class RequestMessage(override val senderId: Actor.AgentId, override val receiverId: Actor.AgentId, methodId: Int, argss: List[List[Any]]) extends Message {
+  def reply(owner: Actor, returnValue: Any): Unit = {
+    val msg = ResponseMessage(receiverId, senderId, returnValue)
+    msg.sessionId = this.sessionId
+    owner.sendMessage(msg)
+  }
+}
+
+case class ResponseMessage(override val senderId: Actor.AgentId, override val receiverId: Actor.AgentId, arg: Any) extends Message
+
+
+class Actor {
+  var id = Actor.getNextAgentId
+  /**
+    * Contains the received messages from the previous step
+    */
+  protected var receivedMessages: List[Message] = List()
+  protected var sendMessages: List[Message] = List()
+  protected var responseListeners: collection.mutable.Map[String, Message => Unit] = collection.mutable.Map()
+
+  val stepFunction: (Int, Int, Int) => (Int, Int) = (a,b,c) => (a,c)
+
+  /**
+    * Adds a list of messages to the agent
+    *
+    * @param messages Actions with receiver matching the agent from the previous step
+    */
+  final def addReceiveMessages(messages: List[Message]): Actor = {
+    this.receivedMessages = this.receivedMessages ::: messages.filter(x => responseListeners.get(x.sessionId).isEmpty)
+    messages.filter(x => responseListeners.get(x.sessionId).isDefined)
+      .foreach(x => {
+        val handler = responseListeners(x.sessionId)
+        responseListeners.remove(x.sessionId)
+        handler(x)
+      })
+    this
+  }
+
+  /**
+    * Adds one message to the sendActions list, which will be collected and distributed at the end of the step
+    *
+    * @param message Action, which should be sent to a different Agent
+    */
+  final def sendMessage(message: Message): Unit = {
+    sendMessages = message :: sendMessages
+  }
+
+  final def getSendMessages: List[Message] = {
+    sendMessages
+  }
+
+  final def cleanSendMessage: Actor = {
+    sendMessages = List()
+    this
+  }
+
+  /**
+    * Sets a message response handler for a specific session id
+    *
+    * @param sessionId session of message you want to listen for a response
+    * @param handler   function, which handles the message
+    */
+  final def setMessageResponseHandler(sessionId: String, handler: Message => Unit): Unit = {
+    responseListeners += (sessionId -> handler)
+  }
+
+  final def popRequestMessages: List[RequestMessage] = {
+    val rM = this.receivedMessages.filter(_.isInstanceOf[RequestMessage]).map(_.asInstanceOf[RequestMessage])
+    this.receivedMessages = this.receivedMessages.filterNot(_.isInstanceOf[RequestMessage])
+    rM
+  }
+
+  final def popResponseMessages: List[ResponseMessage] = {
+    val rM = this.receivedMessages.filter(_.isInstanceOf[ResponseMessage]).map(_.asInstanceOf[ResponseMessage])
+    this.receivedMessages = this.receivedMessages.filterNot(_.isInstanceOf[ResponseMessage])
+    rM
+  }
+
+  var timer: Int = 0
+  var current_pos: Int = 0
+
+  def run_until(until: Int): Actor = {
+    while (timer <= until) {
+      println(this.getClass.getSimpleName, timer, until, current_pos)
+      val (a, b) = stepFunction(current_pos, timer, until)
+      current_pos = a;
+      timer = b
+    }
+    this
+  }
+}

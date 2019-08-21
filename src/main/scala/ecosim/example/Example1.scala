@@ -5,7 +5,7 @@ import ecosim.deep.{ActorType, IR}
 import IR.TopLevel._
 import ecosim.classLifting.{MethodInfo, NBUnit}
 import squid.quasi.lift
-import simulation.Message
+import simulation.{Message, RequestMessageInter}
 
 @lift
 class Market extends Actor {
@@ -31,9 +31,10 @@ class Market extends Actor {
 }
 
 @lift
-class Farmer(val market: Market) extends Actor {
+class Farmer() extends Actor {
   var happiness = 0
   var peers: List[Farmer] = Nil
+  var market: Market = null
 
   def tell(actor: Actor, h: Int): Unit = {
     happiness = happiness - h
@@ -60,7 +61,7 @@ class Environment() extends Actor {
   private val market: Market = new Market()
 
   private var actorList: List[Actor] = List()
-  private var messages: List[Message] = List()
+  private var messages: List[ecosim.runtime.Message] = List()
 
   //TODO: replace this function by the actual method call while compiling
   def call(methodId: Int, argss: List[List[Any]]): Any = {
@@ -68,7 +69,7 @@ class Environment() extends Actor {
   }
 
   def handleMessagesNew(): Unit = {
-    this.getRequestMessages.foreach(x => {
+    this.popRequestMessages.foreach(x => {
       x.reply(this, call(x.methodId, x.argss))
     })
   }
@@ -79,15 +80,15 @@ class Environment() extends Actor {
     //Local mode
     while (true) {
       val mx = messages.groupBy(_.receiverId)
-      this.setReceiveMessages(mx.getOrElse(this.id, List()))
+      this.addReceiveMessages(mx.getOrElse(this.id, List()))
 
       handleMessagesNew()
 
       for(el <- actorList) {
-        el.setReceiveMessages(mx.getOrElse(el.id, List()))
-        el.run_until(current_time)
+        el.addReceiveMessages(mx.getOrElse(el.id, List()))
+        //el.run_until(current_time)
       }
-      messages = actorList.flatMap(_.getMessages)
+      messages = actorList.flatMap(_.getSendMessages)
     }
   }
 
@@ -97,9 +98,9 @@ class Environment() extends Actor {
 
   def createFarmer(): Farmer = {
     val aT: ActorType[Farmer] = this.actorTypes.find(_.name == "Farmer").get.asInstanceOf[ActorType[Farmer]]
-    val farmer = new Farmer(market)
-    farmer.useStepFunction = true
-    farmer.stepFunction = aT.getStepFunction(farmer)
+    val farmer = new Farmer()
+    //farmer.useStepFunction = true
+    //farmer.stepFunction = aT.getStepFunction(farmer)
     actorList = farmer :: actorList
     farmer
   }
@@ -144,7 +145,7 @@ object ManualEmbedding extends App {
 
   val resultMessageCall = Variable[Any]
 
-  val p1 = Variable[_root_.simulation.RequestMessageInter]
+  val p1 = Variable[ecosim.runtime.RequestMessage]
   //Handle later
 
   val marketFunctions = marketSell :: marketSellB :: recursiveFunction :: Nil
@@ -160,7 +161,7 @@ object ManualEmbedding extends App {
   })
 
   val handleMessage = Foreach(
-    code"$marketSelf.getRequestMessages",
+    code"$marketSelf.popRequestMessages",
     p1, LetBinding(
       Option(resultMessageCall),
       callCode,
@@ -219,6 +220,7 @@ object ManualEmbedding extends App {
 
 
   val farmer = ActorType[Farmer]("Farmer",
+    State[Market](IR.methodSymbol[Farmer]("market"), nullValue[Market].asOpenCode) ::
     State[Int](IR.methodSymbol[Farmer]("happiness"), code"0") ::
       State[List[Farmer]](IR.methodSymbol[Farmer]("peers"), code"Nil") :: Nil,
     tell :: nofifyPeers :: Nil,
@@ -246,7 +248,7 @@ object ManualEmbedding extends App {
     }
   }
 
-  val simulation = Simulation(actorTypes, code"val m = new Market; List(m, new Farmer(m))", methodIdMapping, methodMapping)
+  val simulation = Simulation(actorTypes, code"val m = new Market; val f = new Farmer(); f.market = m; List(m, f)", methodIdMapping, methodMapping)
 
   //val actors = simulation.compile()
 
@@ -288,12 +290,6 @@ object ManualEmbedding extends App {
     simpleSimSelf
   )
 
-  /*val cg = new Codegen[SimpleSim](methodIdMapping, simpleSimType)
-  val stepFunction = cg.compile(new SimpleSim)
-  stepFunction(0,0,5)*/
 
   val actors = simulation.codegen()
-  val simu = new old.Simulation()
-  simu.init(actors)
-  simu.run(7)
 }

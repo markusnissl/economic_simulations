@@ -1,11 +1,18 @@
 package ecosim.deep
 
+import java.io.{BufferedWriter, File, FileWriter}
+
 import IR.Predef._
 import squid.lib.MutVar
-import simulation.{RequestMessageInter, ResponseMessageInter}
+import ecosim.runtime.{RequestMessage, ResponseMessage}
+
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int], actorType: ActorType[X], methodMapping: Map[Int, ecosim.classLifting.MethodInfo[_]])(implicit val X: CodeType[X]) {
+class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int],
+                                         actorType: ActorType[X],
+                                         methodMapping: Map[Int, ecosim.classLifting.MethodInfo[_]],
+                                         actorTypes: List[ActorType[_]]
+                                        )(implicit val X: CodeType[X]) {
 
   case class VarWrapper[C](val from: Variable[C], val to: Variable[MutVar[C]])(implicit val A: CodeType[C])
   case class VarValue[C](val variable: Variable[C], val init: OpenCode[C])(implicit val A: CodeType[C])
@@ -17,7 +24,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
   val posSafer = Variable[MutVar[List[Int]]]
   val returnValue = Variable[MutVar[Any]]
 
-  val responseMessage = Variable[MutVar[ResponseMessageInter[Any]]]
+  val responseMessage = Variable[MutVar[ResponseMessage]]
 
   val methodLookupTable: collection.mutable.Map[Int, Int] = collection.mutable.Map[Int, Int]()
 
@@ -118,7 +125,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
   }
 
 
-  def compile: (X) => (Int, Int, Int) => (Int, Int) = {
+  def compile: Unit = {
 
     val methodCodes = this.actorType.methods.map(mtd => codeGenMethod(mtd))
     val (main, mainLength) = this.createCode(this.actorType.main)
@@ -153,10 +160,34 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
 
     val finalCode = this.createExec(this.actorType.self, commandsRewrite)
 
-    println(finalCode)
-    println(IR.showScala(finalCode.rep))
-    val f = finalCode.compile
-    f
+    def changeTypes(code: String): String = {
+      var result = code
+      for (aT <- actorTypes) {
+        result = result.replace(aT.X.runtimeClass.getCanonicalName, "ecosim.generated."+aT.name)
+      }
+      result
+    }
+
+    val scalaF = IR.showScala(finalCode.rep)
+    var initParams = ""
+    for(s <- actorType.states) {
+      initParams = initParams + "var " + s.sym.name + ": " + changeTypes(s.tpe.rep.toString) + " = " + changeTypes(IR.showScala(s.init.rep)) + "\n"
+    }
+    val classString =
+      s"""
+          package ecosim.generated
+
+          class ${actorType.name} extends ecosim.runtime.Actor {
+              $initParams
+
+              def initFunction = ${changeTypes(scalaF)}
+
+              override val stepFunction = initFunction(this)
+        }"""
+    val file = new File("src/main/scala/ecosim/generated/"+actorType.name+".scala")
+    val bw = new BufferedWriter(new FileWriter(file))
+    bw.write(classString)
+    bw.close()
   }
 
 
@@ -170,14 +201,15 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
          val $timer = MutVar(0)
          val $pos = MutVar(0)
 
-         val commandLength = $commands.length
+         val commands = $commands
+         val commandLength = commands.length
 
           (startPos: Int, startTime: Int, endTime: Int) => {
             $timer := startTime
             $pos := startPos
 
             while (($timer!) <= endTime && ($pos!) < commandLength) {
-              val command = $commands(($pos!))
+              val command = commands(($pos!))
               command()
               $pos := ($pos!) + 1
             }
@@ -284,10 +316,10 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
           code"""
                     val sender = ${send.actorFrom};
                     val receiver = ${send.actorRef};
-                    val requestMessage = RequestMessageInter(sender.id, receiver.id, ${methodId}, $convertedArgs);
+                    val requestMessage = RequestMessage(sender.id, receiver.id, ${methodId}, $convertedArgs);
                     sender.sendMessage(requestMessage);
-                    sender.setMessageResponseHandler(requestMessage.sessionId, (response: simulation.Message) => {
-                      $responseMessage := response.asInstanceOf[ResponseMessageInter[Any]]
+                    sender.setMessageResponseHandler(requestMessage.sessionId, (response: ecosim.runtime.Message) => {
+                      $responseMessage := response.asInstanceOf[ResponseMessage]
                     })
                     $returnValue := null
                     ()
@@ -308,7 +340,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
 
         if (methodMapping.get(send.msg.methodId).get.blocking) {
           merger.append((true, true))
-          merger.append((true, false))
+          merger.append((false, false))
           merger.append((true, false))
           merger.append((true, true))
           List(f1, f2, f3, f4)

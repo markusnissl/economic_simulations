@@ -4,7 +4,6 @@ import java.util.UUID
 
 import old.Commodities.Commodity
 import old.Owner.{ITEM_T, Owner, SalesRecord}
-import old.timeseries.TimeseriesC
 
 
 abstract class Message extends Serializable {
@@ -13,7 +12,7 @@ abstract class Message extends Serializable {
   var sessionId: String = UUID.randomUUID().toString
 
   override def toString: String = {
-    return "Message: " + senderId + " -> " + receiverId + "(" + sessionId + ")"
+    "Message: " + senderId + " -> " + receiverId + "(" + sessionId + ")"
   }
 }
 

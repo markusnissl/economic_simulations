@@ -1,10 +1,9 @@
 package ecosim.runtime
 
 
-import simulation.{Message, RequestMessageInter}
 import old.{Instruction, SimO, __do}
 
-class Actor extends SimO {
+/*class Actor extends SimO {
   override def mycopy(): SimO = {
     new Actor()
   }
@@ -12,11 +11,11 @@ class Actor extends SimO {
 
   override def algo: Instruction = __do{}
 
-  setMessageHandler("RequestMessageInter", (message: Message) => {
+  setMessageHandler("RequestMessageInter", (message: simulation.Message) => {
     //Ignore warning, handled by fragment in logic
   })
 
-  setMessageHandler("ResponseMessageInter", (message: Message) => {
+  setMessageHandler("ResponseMessageInter", (message: simulation.Message) => {
     //Ignore warning, handled by fragment in logic
   })
 
@@ -36,7 +35,7 @@ class Actor extends SimO {
       super.run_until(until)
     }
   }
-}
+}*/
 class Simulation {
   
 }
