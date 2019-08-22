@@ -13,7 +13,7 @@ libraryDependencies  ++= Seq(
 //  "org.scalanlp" %% "breeze-natives" % "0.12",
   "org.scalanlp" %% "breeze-viz" % "0.13.2",
   "org.scalatest" %% "scalatest" % "3.0.0" % "test",
-  "org.apache.spark" %% "spark-core" % "2.4.3",
+  "org.apache.spark" %% "spark-simulation.core" % "2.4.3",
   "com.chuusai" %% "shapeless" % "2.3.3"
 )
 

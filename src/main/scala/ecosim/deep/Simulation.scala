@@ -4,7 +4,6 @@ package deep
 import java.io.{BufferedWriter, File, FileWriter}
 
 import IR.Predef._
-import ecosim.example.ex1.{Farmer, Market}
 
 case class Message[R](methodId: Int, argss: List[List[OpenCode[_]]])
 
@@ -36,7 +35,7 @@ case class IfElse[A](cond: OpenCode[Boolean], ifBody: Algo[A], elseBody: Algo[A]
 
 case class LetBinding[V: CodeType, A: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
 
-abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], val body: Algo[R], val blocking: Boolean) {
+abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], val body: Algo[R], val blocking: Boolean)(implicit val R:CodeType[R]) {
   def sym: IR.MtdSymbol = mtd.symbol
 
   val mtd: cls.Method[R, cls.Scp]
@@ -134,14 +133,14 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
     def changeTypes(code: String): String = {
       var result = code
       for (aT <- actorTypes) {
-        result = result.replace(aT.X.classTag.toString, "ecosim.generated." + aT.name)
+        result = result.replace(aT.X.classTag.toString, "ecosim.simulation.generated." + aT.name)
       }
       result
     }
 
     val classString =
       s"""
-          package ecosim.generated
+          package ecosim.simulation.generated
 
           class Environment extends ecosim.runtime.Actor {
               var actors:List[ecosim.runtime.Actor] = List()
@@ -174,7 +173,7 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
           }
         """
 
-    val file = new File("src/main/scala/ecosim/generated/Environment.scala")
+    val file = new File("src/main/scala/ecosim/simulation.generated/Simulation.scala")
     val bw = new BufferedWriter(new FileWriter(file))
     bw.write(classString)
     bw.close()

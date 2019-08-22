@@ -4,111 +4,10 @@ import ecosim.runtime._
 import ecosim.deep.{ActorType, IR}
 import IR.TopLevel._
 import ecosim.classLifting.{MethodInfo, NBUnit}
+import ecosim.example.{Farmer, Market}
 import squid.quasi.lift
 import simulation.{Message, RequestMessageInter}
 
-@lift
-class Market extends Actor {
-  var goods: List[String] = Nil
-
-  def sell(unit: Int): Unit = {
-    println("Market sells: " + unit)
-  }
-
-  def sell2(unit: Int): Int = {
-    println("Market sells: " + unit)
-    42
-  }
-
-  def recursiveTest(l: List[Int]): Unit = {
-    if (l.isEmpty) {
-    } else {
-      recursiveTest(l.tail)
-      println(l.head)
-    }
-  }
-
-}
-
-@lift
-class Farmer() extends Actor {
-  var happiness = 0
-  var peers: List[Farmer] = Nil
-  var market: Market = null
-
-  def tell(actor: Actor, h: Int): Unit = {
-    happiness = happiness - h
-  }
-
-  def notifyPeers(): Unit = {
-    peers.foreach { p =>
-      p.tell(this, happiness)
-    }
-  }
-
-}
-
-
-/**
-  * This is a demo environment for running the simulations.
-  * The idea is to run this one on the driver, which creates and deletes the actors accordingly.
-  * Wait for code compilation to see how it works :)
-  */
-@lift
-class Environment() extends Actor {
-
-  private var actorTypes: List[ActorType[Actor]] = List()
-  private val market: Market = new Market()
-
-  private var actorList: List[Actor] = List()
-  private var messages: List[ecosim.runtime.Message] = List()
-
-  //TODO: replace this function by the actual method call while compiling
-  def call(methodId: Int, argss: List[List[Any]]): Any = {
-    ???
-  }
-
-  def handleMessagesNew(): Unit = {
-    this.popRequestMessages.foreach(x => {
-      x.reply(this, call(x.methodId, x.argss))
-    })
-  }
-
-  def main(): Unit = {
-    createFarmer()
-
-    //Local mode
-    while (true) {
-      val mx = messages.groupBy(_.receiverId)
-      this.addReceiveMessages(mx.getOrElse(this.id, List()))
-
-      handleMessagesNew()
-
-      for(el <- actorList) {
-        el.addReceiveMessages(mx.getOrElse(el.id, List()))
-        //el.run_until(current_time)
-      }
-      messages = actorList.flatMap(_.getSendMessages)
-    }
-  }
-
-  def getMarket(): Market = {
-    market
-  }
-
-  def createFarmer(): Farmer = {
-    val aT: ActorType[Farmer] = this.actorTypes.find(_.name == "Farmer").get.asInstanceOf[ActorType[Farmer]]
-    val farmer = new Farmer()
-    //farmer.useStepFunction = true
-    //farmer.stepFunction = aT.getStepFunction(farmer)
-    actorList = farmer :: actorList
-    farmer
-  }
-}
-
-
-@lift
-class SimpleSim() extends Actor {}
 
 object ManualEmbedding extends App {
 
@@ -255,40 +154,6 @@ object ManualEmbedding extends App {
   /*val simu = new _root_.Simulation.Simulation()
   simu.init(actors)
   simu.run(7)*/
-
-
-  val p3 = Variable[Int]
-  val simpleSimSelf = Variable[SimpleSim]
-  val simpleSimType = ActorType(
-    "SimpleSim",
-    Nil,
-    marketSell :: marketSellB :: Nil,
-    Forever(
-      LetBinding(None,
-        ScalaCode(code"println(1)"),
-        LetBinding(None,
-          ScalaCode(code"println(2)"),
-          LetBinding(None,
-            Foreach(code"List(1,2,3)", p3, ScalaCode(code"println($p3)")),
-            LetBinding(None,
-              CallMethodDebug[Unit](marketSell.sym, List(List(code"1000"))),
-              LetBinding(None,
-                Wait(code"1"),
-                LetBinding(None,
-                  LetBinding(Option(testResult), ScalaCode[Int](code"42"), ScalaCode(code"println($testResult)")),
-                  LetBinding(None,
-                    LetBinding(Option(testResult), ScalaCode[Int](code"11"), ScalaCode(code"println($testResult)")),
-                    LetBinding(Option(testResult), CallMethodDebug[Int](marketSellB.sym, List(List(code"422"))), ScalaCode(code"println($testResult)"))
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
-    ),
-    simpleSimSelf
-  )
 
 
   val actors = simulation.codegen()

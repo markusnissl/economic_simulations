@@ -163,7 +163,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
     def changeTypes(code: String): String = {
       var result = code
       for (aT <- actorTypes) {
-        result = result.replace(aT.X.runtimeClass.getCanonicalName, "ecosim.generated."+aT.name)
+        result = result.replace(aT.X.runtimeClass.getCanonicalName, "ecosim.simulation.generated."+aT.name)
       }
       result
     }
@@ -175,7 +175,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
     }
     val classString =
       s"""
-          package ecosim.generated
+          package ecosim.simulation.generated
 
           class ${actorType.name} extends ecosim.runtime.Actor {
               $initParams
@@ -184,7 +184,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
 
               override val stepFunction = initFunction(this)
         }"""
-    val file = new File("src/main/scala/ecosim/generated/"+actorType.name+".scala")
+    val file = new File("src/main/scala/ecosim/simulation.generated/"+actorType.name+".scala")
     val bw = new BufferedWriter(new FileWriter(file))
     bw.write(classString)
     bw.close()
@@ -305,7 +305,7 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
         val methodId = Const(send.msg.methodId)
 
         val initCodeO:OpenCode[List[List[Any]]]=code"Nil"
-        //Convert args, so that the can be used inside of generated codes
+        //Convert args, so that the can be used inside of simulation.generated codes
         val convertedArgs:OpenCode[List[List[Any]]] = send.msg.argss.foldRight(initCodeO)((x,y) => {
           val initCode:OpenCode[List[Any]]=code"Nil"
           val z:OpenCode[List[Any]] = x.foldRight(initCode)((a,b) => code"$a::$b")
@@ -448,11 +448,11 @@ class Codegen[X <: ecosim.runtime.Actor](methodIdMapping: Map[IR.MtdSymbol, Int]
 
           val met2 = code"""$bindingMutFinal := (($returnValue!).asInstanceOf[v]); ()"""
           merger.append((true, true))
-          val bound = lb.bound.get
-          val met3 = createCodeLogic(lb.rest).map(x => x.subs(bound).~>(code"($bindingMutFinal!)"))
+          val boundValue = lb.bound.get
+          val met3 = createCodeLogic(lb.rest).map(x => x.subs(boundValue).~>(code"($bindingMutFinal!)"))
 
           if (!contained) {
-            varSavers = varSavers.filter(_.from != lb.bound)
+            varSavers = varSavers.filter(_.from != lb.bound.get)
           }
 
           met1 ::: List(met2) ::: met3
