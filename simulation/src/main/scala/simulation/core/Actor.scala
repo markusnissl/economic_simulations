@@ -1,4 +1,4 @@
-package ecosim.runtime
+package simulation.core
 
 import java.util.UUID
 
@@ -49,7 +49,7 @@ class Actor {
   protected var sendMessages: List[Message] = List()
   protected var responseListeners: collection.mutable.Map[String, Message => Unit] = collection.mutable.Map()
 
-  val stepFunction: (Int, Int, Int) => (Int, Int) = (a,b,c) => (a,c)
+  def stepFunction: (Int, Int) = (current_pos, timer+1)
 
   /**
     * Adds a list of messages to the agent
@@ -113,7 +113,7 @@ class Actor {
   def run_until(until: Int): Actor = {
     while (timer <= until) {
       println(this.getClass.getSimpleName, timer, until, current_pos)
-      val (a, b) = stepFunction(current_pos, timer, until)
+      val (a, b) = stepFunction
       current_pos = a;
       timer = b
     }

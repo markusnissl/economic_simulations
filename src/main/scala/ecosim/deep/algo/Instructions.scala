@@ -1,12 +1,8 @@
-package ecosim
+package ecosim.deep.algo
 
 import scala.annotation.compileTimeOnly
 
-package object deep {
-
-  import IR.Predef._
-  import squid.lib.MutVar
-
+object Instructions {
   @compileTimeOnly("This function can only be calld at compile time")
   def getMethodPosition(methodId: Int): Int = {
     ???
@@ -27,4 +23,5 @@ package object deep {
     ???
   }
 
+  def splitter(): Unit = {???}
 }

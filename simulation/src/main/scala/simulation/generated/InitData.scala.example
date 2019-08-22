@@ -1,0 +1,7 @@
+
+          package simulation.generated
+
+          object InitData {
+                      def initActors: List[simulation.core.Actor] = List()
+          }
+        

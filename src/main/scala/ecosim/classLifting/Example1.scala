@@ -1,6 +1,6 @@
 package ecosim.classLifting
+import simulation.core.Actor
 import squid.quasi._
-import ecosim.runtime.Actor
 
 //TODO: make a new annotation for main method?
 @lift
