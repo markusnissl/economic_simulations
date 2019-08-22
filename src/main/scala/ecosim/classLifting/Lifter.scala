@@ -5,7 +5,10 @@ import ecosim.deep.IR
 import IR.Predef._
 import IR.TopLevel._
 import IR.Predef.base.MethodApplication
-import ecosim.runtime.Actor
+import ecosim.deep.algo.{Algo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
+import ecosim.deep.codegen.{ClassCreation, InitCreation}
+import ecosim.deep.member.{ActorType, LiftedMethod, State}
+import simulation.core.Actor
 import squid.ir.RuntimeSymbols.MtdSymbol
 
 /** Code lifter
@@ -28,10 +31,10 @@ class Lifter {
   /** Lifts the classes and object initialization
     *
     * @param startClasses - classes that need to be lifted, in form of [[Clasz]]
-    * @param initializationClass - contains only one method, which has to return a list of [[ecosim.runtime.Actor]]
+    * @param initializationClass - contains only one method, which has to return a list of [[simulation.core.Actor]]
     * @return deep embedding of the classes
     */
-  def apply(startClasses: List[Clasz[_ <: Actor]], initializationClass: Clasz[_]): ecosim.deep.Simulation = {
+  def apply(startClasses: List[Clasz[_ <: Actor]], initializationClass: Clasz[_]): (List[ActorType[_]], OpenCode[List[Actor]]) = {
     var actorsInit: OpenCode[List[Actor]] = liftInitCode(initializationClass)
     //Collecting method symbols to generate methodsIdMap
     var counter = 0
@@ -49,7 +52,8 @@ class Lifter {
     val endTypes = startClasses.map(c => {
       liftActor(c)
     })
-    ecosim.deep.Simulation(endTypes, actorsInit, methodsIdMap, methodsMap)
+
+    (endTypes, actorsInit)
   }
 
   /** Lifts a specific [[Actor]] class into an ActorType
@@ -71,7 +75,7 @@ class Lifter {
     clasz.methods.foreach(method => {
       val cde = method.body
       val mtdBody = liftCode(cde, actorSelfVariable, clasz)
-      endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(methodsIdMap(method.symbol)).blocking) {
+      endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(methodsIdMap(method.symbol)).blocking, methodsIdMap(method.symbol)) {
         override val mtd: cls.Method[Any, cls.Scp] = method.asInstanceOf[this.cls.Method[Any,cls.Scp]]
       }) :: endMethods
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
@@ -105,7 +109,7 @@ class Lifter {
     * @tparam T - return type of the expression
     * @return [[Algo]] - deep representation of the expression
     */
-  private def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: ecosim.runtime.Actor]): Algo[T] = {
+  private def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: simulation.core.Actor]): Algo[T] = {
     cde match {
       case code"val $x: $xt = $v; $rest: T" =>
         val f = LetBinding(Some(x), liftCode(v, actorSelfVariable, clasz), liftCode(rest, actorSelfVariable, clasz))
@@ -123,14 +127,14 @@ class Lifter {
         val f = Forever(liftCode(body, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"if($cond: Boolean) $ifBody:T else $elseBody: T" =>
-        val f = IfElse(cond, liftCode(ifBody, actorSelfVariable, clasz), liftCode(elseBody, actorSelfVariable, clasz))
+        val f = IfThenElse(cond, liftCode(ifBody, actorSelfVariable, clasz), liftCode(elseBody, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"SpecialInstructions.waitTurns($x)" =>
         val f = Wait(x)
         f.asInstanceOf[Algo[T]]
       case code"SpecialInstructions.handleMessages()" =>
         val resultMessageCall = Variable[Any]
-        val p1 = Variable[_root_.simulation.RequestMessageInter]
+        val p1 = Variable[simulation.core.RequestMessage]
         val algo: Algo[Any] = NoOp()
         val callCode = clasz.methods.foldRight(algo)((method, rest) => {
             val methodId = methodsIdMap(method.symbol)
@@ -140,10 +144,10 @@ class Lifter {
                 code"$p1.argss(${Const(x._2)})(${Const(y._2)})"
               })
             })
-            IfElse(code"$p1.methodId==${Const(methodId)}", CallMethod[Any](methodId, argss), rest)
+            IfThenElse(code"$p1.methodId==${Const(methodId)}", CallMethod[Any](methodId, argss), rest)
         })
         val handleMessage = Foreach(
-          code"$actorSelfVariable.getRequestMessages",
+          code"$actorSelfVariable.popRequestMessages",
           p1, LetBinding(
             Option(resultMessageCall),
             callCode,
@@ -162,7 +166,7 @@ class Lifter {
         }
         //method recipient is another actor
         else {
-          val f = Send(actorSelfVariable.toCode, recipientActorVariable, Message(methodsIdMap(ma.symbol), argss))
+          val f = Send(actorSelfVariable.toCode, recipientActorVariable, methodsIdMap(ma.symbol), argss, true) //TODO: pass blocking
           f.asInstanceOf[Algo[T]]
         }
       case _ =>
@@ -193,7 +197,7 @@ class Lifter {
     * @tparam T - return type of the expression
     * @return [[Algo]] - deep representation of the expression
     */
-  def liftCodeOther[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: ecosim.runtime.Actor]): Option[Algo[T]] = {
+  def liftCodeOther[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: simulation.core.Actor]): Option[Algo[T]] = {
     None
   }
 }
@@ -205,10 +209,15 @@ object App1 extends App {
   val startClasses: List[Clasz[_ <: Actor]] = List(cls1, cls2)
   val mainClass = cls3
   val lifter = new Lifter()
-  val simulation1 = lifter(startClasses, mainClass)
-  val actors1 = simulation1.codegen()
-  /*val simu1 = new old.Simulation()
-  simu1.init(actors1)
-  simu1.run(10)*/
+  val simulationData = lifter(startClasses, mainClass)
 
+  simulationData._1.foreach({
+    case x => {
+      val cc = new ClassCreation(x, simulationData._1)
+      cc.run()
+    }
+  })
+
+  val ic = new InitCreation(simulationData._2, simulationData._1)
+  ic.run()
 }
