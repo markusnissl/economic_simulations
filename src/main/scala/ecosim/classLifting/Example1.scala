@@ -6,8 +6,9 @@ import ecosim.runtime.Actor
 @lift
 class MainClass {
   def main(): List[Actor] = {
-    val a = new Actor1()
-    List(a, a.actor2)
+    val b = new Actor2()
+    val a = new Actor1(b)
+    List(b,a)
   }
 }
 
@@ -21,22 +22,20 @@ class Actor2 extends Actor {
     while (true){
       sell(1,22)("i sell stuff")
       SpecialInstructions.waitTurns(1)
+      SpecialInstructions.handleMessages()
     }
   }
 }
 
 @lift
-class Actor1() extends Actor {
+class Actor1(val actor2: Actor2) extends Actor {
   val a = List(1,2,3)
   val b = List(2,3,4)
   var c = 10
   var g = "string"
-  var actor2 = new Actor2()
   def main() = {
     while(true) {
-      met1(1,65)(3)
-      met3()
-//      actor2.sell(5,3)("I buy stuff")
+      if(3 == 3) println(3)
       SpecialInstructions.waitTurns(3)
     }
   }
