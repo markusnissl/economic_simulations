@@ -1,6 +1,6 @@
 package simulation.core
 
-import simulation.generated.InitData
+//import simulation.generated.InitData
 
 class Simulation extends App{
 
@@ -10,7 +10,7 @@ class Simulation extends App{
   var until = 10
 
   def init(): Unit = {
-    InitData.initActors
+    //InitData.initActors
   }
 
   def main(): Unit = {
