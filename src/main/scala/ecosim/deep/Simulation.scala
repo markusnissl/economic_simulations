@@ -1,47 +1,63 @@
 package ecosim
 package deep
 
+import java.io.{BufferedWriter, File, FileWriter}
+
 import IR.Predef._
 import ecosim.example.ex1.{Farmer, Market}
 
 case class Message[R](methodId: Int, argss: List[List[OpenCode[_]]])
+
 case class MessageDebug[R](sym: IR.MtdSymbol, argss: List[List[OpenCode[_]]])
 
 sealed abstract class Algo[A](implicit val tpe: CodeType[A])
+
 case class Forever(body: Algo[_]) extends Algo[Unit]
+
 case class Wait(cde: OpenCode[Int]) extends Algo[Unit]
+
 case class CallMethodDebug[R: CodeType](sym: IR.MtdSymbol, argss: List[List[OpenCode[_]]]) extends Algo[R]
+
 case class CallMethod[R: CodeType](methodId: Int, argss: List[List[OpenCode[_]]]) extends Algo[R]
-case class Send[R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: Message[R])(implicit val R:CodeType[R]) extends Algo[R]
-case class SendDebug[R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: MessageDebug[R])(implicit val R:CodeType[R]) extends Algo[R]
+
+case class Send[R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: Message[R])(implicit val R: CodeType[R]) extends Algo[R]
+
+case class SendDebug[R](actorFrom: OpenCode[runtime.Actor], actorRef: OpenCode[runtime.Actor], msg: MessageDebug[R])(implicit val R: CodeType[R]) extends Algo[R]
+
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit]
+
 case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A]
+
 case class NoOp() extends Algo[Any]
-case class If[A](cond: OpenCode[Boolean], body:Algo[A])(implicit val A: CodeType[A]) extends Algo[A]
-case class IfElse[A](cond: OpenCode[Boolean], ifBody:Algo[A], elseBody:Algo[A])(implicit val A: CodeType[A]) extends Algo[A]
+
+case class If[A](cond: OpenCode[Boolean], body: Algo[A])(implicit val A: CodeType[A]) extends Algo[A]
+
+case class IfElse[A](cond: OpenCode[Boolean], ifBody: Algo[A], elseBody: Algo[A])(implicit val A: CodeType[A]) extends Algo[A]
+
 case class LetBinding[V: CodeType, A: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
 
 abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], val body: Algo[R], val blocking: Boolean) {
   def sym: IR.MtdSymbol = mtd.symbol
+
   val mtd: cls.Method[R, cls.Scp]
 
 
   override def hashCode() = sym.hashCode()
+
   override def equals(that: Any) = that match {
     case that: LiftedMethod[_] => that.sym === sym
   }
+
   override def toString = s"${sym.asMethodSymbol.owner.name}.${sym.asMethodSymbol.name}"
 
 }
 
 
-
-//case class State[A: CodeType](sym: IR.MtdSymbol, init: OpenCode[A])
 case class State[A](sym: IR.MtdSymbol, init: OpenCode[A])(implicit val tpe: CodeType[A]) {
   override def toString = s"var ${sym.asMethodSymbol.owner.name}.${sym.asMethodSymbol.name}"
 }
 
-case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], methods: List[LiftedMethod[_]], main: Algo[_], self: Variable[X])(implicit val X:CodeType[X]){
+case class ActorType[X <: runtime.Actor](name: String, states: List[State[_]], methods: List[LiftedMethod[_]], main: Algo[_], self: Variable[X])(implicit val X: CodeType[X]) {
 
   private var stepFunction: (X) => (Int, Int, Int) => (Int, Int) = _
   /*private def compileMethod[A](method: LiftedMethod[_], args:ListBuffer[Assignment[_]], methodIdMapping: Map[Int, IR.MtdSymbol]): (Variable[_], Vector[SimpleInstruction]) = {
@@ -74,9 +90,11 @@ case class ActorType[X <: runtime.Actor](name: String, state: List[State[_]], me
   }*/
 
   // Just for testing at the moment
-  def codegen(methodIdMapping: Map[IR.MtdSymbol, Int], methodMapping: Map[Int, ecosim.classLifting.MethodInfo[_]]): Unit = {
-    val cg = new Codegen[X](methodIdMapping, this, methodMapping)
-    stepFunction = cg.compile
+  def codegen(methodIdMapping: Map[IR.MtdSymbol, Int],
+              methodMapping: Map[Int, ecosim.classLifting.MethodInfo[_]],
+              actorTypes: List[ActorType[_]]): Unit = {
+    val cg = new Codegen[X](methodIdMapping, this, methodMapping, actorTypes)
+    cg.compile
   }
 
   def getStepFunction(actor: X): (Int, Int, Int) => (Int, Int) = {
@@ -111,30 +129,61 @@ case class Simulation(actorTypes: List[ActorType[_]], init: OpenCode[List[runtim
     actors
   }*/
 
-  def codegen(): List[runtime.Actor] = {
+
+  def codegenEnv(): Unit = {
+    def changeTypes(code: String): String = {
+      var result = code
+      for (aT <- actorTypes) {
+        result = result.replace(aT.X.classTag.toString, "ecosim.generated." + aT.name)
+      }
+      result
+    }
+
+    val classString =
+      s"""
+          package ecosim.generated
+
+          class Environment extends ecosim.runtime.Actor {
+              var actors:List[ecosim.runtime.Actor] = List()
+
+              def init() {
+                actors = ${changeTypes(IR.showScala(init.rep))}
+              }
+
+              var messages: List[ecosim.runtime.Message] = List()
+
+            override val stepFunction: (Int, Int, Int) => (Int, Int) = (pos, time, until) => {
+              messages = messages.filter(_.receiverId == this.id).flatMap(handleEnvMessage) ::: messages.filter(_.receiverId != this.id)
+              val mx = messages.groupBy(_.receiverId)
+              actors = actors.map {
+                a =>
+                  a
+                    .cleanSendMessage
+                    .addReceiveMessages(mx.getOrElse(a.id, List()))
+                    .run_until(timer)
+              }
+
+              messages = actors.flatMap(_.getSendMessages)
+
+              (0, time + 1)
+            }
+
+            def handleEnvMessage(message: ecosim.runtime.Message): List[ecosim.runtime.Message] = message match {
+              case _ => List()
+            }
+          }
+        """
+
+    val file = new File("src/main/scala/ecosim/generated/Environment.scala")
+    val bw = new BufferedWriter(new FileWriter(file))
+    bw.write(classString)
+    bw.close()
+  }
+
+  def codegen(): Unit = {
     //Generate step function of actorTypes
-    actorTypes.foreach(_.codegen(methodIdMapping, methodMapping))
-
-    val actors = this.init.unsafe_asClosedCode.run
-    actors.foreach(a => {
-      val actorTypeSearch = actorTypes.find(_.name == a.getClass.getSimpleName)
-      if (actorTypeSearch.isEmpty) {
-        throw new Exception("Actor Type not defined")
-      }
-
-      val actorType = actorTypeSearch.get
-
-      actorType match {
-        case aT:ActorType[c] => {
-          import aT.X
-          a.stepFunction = actorType.asInstanceOf[ActorType[c]].getStepFunction(a.asInstanceOf[c])
-          a.useStepFunction = true
-        }
-
-      }
-    })
-
-    actors
+    actorTypes.foreach(_.codegen(methodIdMapping, methodMapping, actorTypes))
+    codegenEnv()
   }
 
 }
