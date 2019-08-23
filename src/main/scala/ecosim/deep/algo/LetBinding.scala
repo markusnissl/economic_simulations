@@ -39,7 +39,9 @@ case class LetBinding[V, A: CodeType](bound: Option[Variable[V]], value: Algo[V]
       val bindingMutFinal = bindingMut
 
       val met2 = code"""$bindingMutFinal := ((${AlgoInfo.returnValue}!).asInstanceOf[V]); ()"""
-      AlgoInfo.merger.append((true, true))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("LetBinding met2", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), met2))
+      AlgoInfo.nextPos
+
       val boundValue = bound.get
       val met3 = (rest.codegen).map(x => x.subs(boundValue).~>(code"($bindingMutFinal!)"))
 

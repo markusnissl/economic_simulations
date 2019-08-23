@@ -11,8 +11,8 @@ case class ScalaCode[A: CodeType](cde: OpenCode[A]) extends Algo[A] {
     */
   override def codegen: List[IR.Predef.OpenCode[Unit]] = {
     val met: OpenCode[Unit] = code"""${AlgoInfo.returnValue} := $cde; ()"""
-    AlgoInfo.merger.append((true, true))
-
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("ScalaCode met",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), met))
+    AlgoInfo.nextPos
     List(met)
   }
 }

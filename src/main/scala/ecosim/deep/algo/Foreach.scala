@@ -24,27 +24,25 @@ case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E],
     AlgoInfo.variables = AlgoInfo.VarWrapper(iter, iterMut) :: AlgoInfo.variables
     AlgoInfo.variables = AlgoInfo.VarWrapper(variable, listValMut) :: AlgoInfo.variables
 
-    //Merger of f2 has to be done before calling createCode of f3!!!
-    AlgoInfo.merger.append((true, true))
-    AlgoInfo.merger.append((false, false))
 
     val f1 = code"""$iterMut := $ls.iterator; ()"""
 
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f1", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1))
+    AlgoInfo.nextPos
+    //Pos of f2 has to be saved before calling createCode of f3!!!
+    val tmpPos = AlgoInfo.posCounter
+    AlgoInfo.nextPos
 
-    val tmp = AlgoInfo.merger
 
     // sub-merging here required because of f3.length access to jump to correct position
-    AlgoInfo.merger = ListBuffer()
     val f3_0 = AlgoInfo.restorePosition
-    val f3_1 = f.codegen ::: List(f3_0)
-    AlgoInfo.merger.append((true, false)) //f3_0
-    val f3 = AlgoInfo.mergeCodes(f3_1, AlgoInfo.merger.toList)
-
-    AlgoInfo.merger = tmp
-    AlgoInfo.mergeMerger(f3)
+    val f3 = f.codegen ::: List(f3_0)
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f3_0",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(tmpPos), f3_0))
+    AlgoInfo.nextPos
 
     val f2 = code"""if($iter.hasNext) {${AlgoInfo.pushCurrent}; $listValMut := $iter.next;} else {${AlgoInfo.jump(f3.length)};}"""
-
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 if",AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(tmpPos+1), f2))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 else",AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), f2))
 
     (List(f1, f2) ::: f3).map(x => x.subs(iter).~>(code"($iterMut!)")).map(x => x.subs(variable).~>(code"($listValMut!)"))
   }

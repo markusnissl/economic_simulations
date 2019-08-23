@@ -11,8 +11,8 @@ case class Wait(cde: OpenCode[Int]) extends Algo[Unit] {
 
   override def codegen: List[IR.Predef.OpenCode[Unit]] = {
     val met: OpenCode[Unit] = code"${AlgoInfo.timeVar} := (${AlgoInfo.timeVar}!) + $cde; ()"
-    AlgoInfo.merger.append((true, false))
-
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("wait met", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), met, waitEdge = true))
+    AlgoInfo.nextPos
     List(met)
   }
 }

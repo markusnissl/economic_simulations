@@ -15,27 +15,23 @@ case class IfThenElse[A](cond: OpenCode[Boolean], ifBody: Algo[A], elseBody: Alg
     */
   override def codegen: List[IR.Predef.OpenCode[Unit]] = {
     //Append for met1 before calling met2
-    AlgoInfo.merger.append((true, false))
+    val tmpPosMet1 = AlgoInfo.posCounter
+    AlgoInfo.nextPos
 
-    var tmp = AlgoInfo.merger
-    AlgoInfo.merger = ListBuffer()
-    val met2_1 = ifBody.codegen
-    val met2 = AlgoInfo.mergeCodes(met2_1, AlgoInfo.merger.toList)
-    AlgoInfo.merger = tmp
-    AlgoInfo.mergeMerger(met2)
+    val met2 = ifBody.codegen
 
     //Append for metInner before calling met3
-    AlgoInfo.merger.append((true, false))
+    val tmpPosMetInner = AlgoInfo.posCounter
+    AlgoInfo.nextPos
 
-    tmp = AlgoInfo.merger
-    AlgoInfo.merger = ListBuffer()
-    val met3_1 = elseBody.codegen
-    val met3 = AlgoInfo.mergeCodes(met3_1, AlgoInfo.merger.toList)
-    AlgoInfo.merger = tmp
-    AlgoInfo.mergeMerger(met3)
+    val met3 = elseBody.codegen
 
     val met1 = code"""if(!$cond) {${AlgoInfo.jump(met2.length + 1)}}"""
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("IfThenElse met1 cond valid",AlgoInfo.CodeNodePos(tmpPosMet1), AlgoInfo.CodeNodePos(tmpPosMet1+1), met1))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("IfThenElse met1 cond invalid", AlgoInfo.CodeNodePos(tmpPosMet1), AlgoInfo.CodeNodePos(tmpPosMetInner+1), met1))
+
     val metInner = code"""${AlgoInfo.jump(met3.length)}; ()"""
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("IfThenElse metInner", AlgoInfo.CodeNodePos(tmpPosMetInner), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), metInner))
 
     List(met1) ::: met2 ::: List(metInner) ::: met3
   }

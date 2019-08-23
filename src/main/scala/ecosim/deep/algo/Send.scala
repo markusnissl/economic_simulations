@@ -51,11 +51,16 @@ case class Send[R](actorFrom: OpenCode[Actor],
                        ${AlgoInfo.responseMessage} := null;
                        ()"""
 
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1))
+      AlgoInfo.nextPos
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f2",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f2, waitEdge = true))
+      AlgoInfo.nextPos
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f3))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 no result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter-1), f3))
+      AlgoInfo.nextPos
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f4",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f4))
+      AlgoInfo.nextPos
 
-      AlgoInfo.merger.append((true, true))
-      AlgoInfo.merger.append((false, false))
-      AlgoInfo.merger.append((true, false))
-      AlgoInfo.merger.append((true, true))
       List(f1, f2, f3, f4)
     } else {
       val f1: OpenCode[Unit] =
@@ -67,7 +72,8 @@ case class Send[R](actorFrom: OpenCode[Actor],
                     ${AlgoInfo.returnValue} := null
                     ()
               """
-      AlgoInfo.merger.append((true, true))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send nb f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1))
+      AlgoInfo.nextPos
       List(f1)
     }
   }

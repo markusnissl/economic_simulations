@@ -4,7 +4,7 @@ import ecosim.deep.IR.Predef._
 import ecosim.deep.member.ResponseMessage
 import squid.lib.MutVar
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 /**
   * This object contains shared data between the algo codegens
@@ -16,9 +16,10 @@ object AlgoInfo {
     * Helper class to save mappings between a variable introduced to a mutable variable, which is used in
     * the program. This is necessary, since it is not possible to define var variable references in squid
     * at the moment, thus we have to use the MutVar Wrapper to change the variable afterwards
+    *
     * @param from original variable defined by Algo
-    * @param to new mutation variable created as replacement for original one
-    * @param A code type of original variable
+    * @param to   new mutation variable created as replacement for original one
+    * @param A    code type of original variable
     * @tparam C type of original variable
     */
   case class VarWrapper[C](from: Variable[C], to: Variable[MutVar[C]])(implicit val A: CodeType[C])
@@ -61,7 +62,7 @@ object AlgoInfo {
     * List, saving all variables already defined, so that a redefinement of the variable
     * is not necessary inside the used fragment.
     */
-  var varSavers:List[VarWrapper[_]] = List[VarWrapper[_]]()
+  var varSavers: List[VarWrapper[_]] = List[VarWrapper[_]]()
 
   /**
     * Helper, for pushing the current position on the stack
@@ -74,6 +75,7 @@ object AlgoInfo {
 
   /**
     * Helper, for jumping relativly to a different position
+    *
     * @param offset relative jumping offset
     * @return Code containing the position modification
     */
@@ -85,38 +87,83 @@ object AlgoInfo {
   val restorePosition = code"""$positionVar := ($positionStack.remove(0) - 1); ()"""
 
 
-  /*The following code, will change when implementing a new state machine, therefore code is not commented yet*/
+  /**
+    * Current position/code fragment
+    */
+  var posCounter = 0
 
-  //Rename to make clear that this is dag info
-  var merger: ListBuffer[(Boolean, Boolean)] = ListBuffer()
-
-  def mergeCodes(com: List[OpenCode[Unit]], mergeInfo: List[(Boolean, Boolean)]): List[OpenCode[Unit]] = {
-    if (mergeInfo.isEmpty) {
-      com
-    } else if (mergeInfo.tail.isEmpty) {
-      com
-    } else {
-      val current = mergeInfo.head
-      val next = mergeInfo.tail.head
-
-      if (current._2 && next._1) {
-        val newMergeInfo = (current._1, next._2) :: mergeInfo.tail.tail
-        val a = com.head
-        val b = com.tail.head
-        val comNew = (code"$a; $b") :: com.tail.tail
-        mergeCodes(comNew, newMergeInfo)
-      } else {
-        com.head :: mergeCodes(com.tail, mergeInfo.tail)
-      }
-    }
+  /**
+    * Go to next code fragment
+    */
+  def nextPos {
+    posCounter+=1
   }
 
   /**
-    * Note:
-    * Not allowed to set true or false to beginning or ending, otherwise if jumps would be wrong and not working
+    * Wrapper class for modeling a node id, which can ether be a method id or a position
     */
-  def mergeMerger(com: List[OpenCode[Unit]]): Unit = {
-    com.foreach(x => merger.append((false, false)))
+  abstract class CodeNode {
+    def getId: String
+  }
+
+  /**
+    * Node for a position in code
+    * @param pos id of posCounter
+    */
+  case class CodeNodePos(pos: Int) extends CodeNode {
+    override def toString: String = {
+      pos.toString
+    }
+
+    override def getId: String = (pos.toString)
+  }
+
+  /**
+    * method id, which should reference the node to
+    * @param id methodId, which node should be referenced
+    * @param end if node is start or end of method
+    */
+  case class CodeNodeMtd(id: Int, end:Boolean=false) extends CodeNode {
+    override def getId: String = "M"+id+(if (end) "E" else "")
+  }
+
+  /**
+    * IF inside method, set to true, so that graph knows about that (just for displaying in a different color atm)
+    */
+  var isMethod = false
+
+  /**
+    * Models an edge between to nodes
+    * @param label a random name, which is displayed when drawing the graph
+    * @param from start node
+    * @param to end node
+    * @param code actual code, which is executed when
+    * @param waitEdge an information, that this edge is increasing the timer
+    * @param isMethod is filled out automatically by using the isMethod vaiable of this class
+    */
+  case class EdgeInfo(label: String, from: CodeNode, to: CodeNode, code: OpenCode[Unit], waitEdge:Boolean = false, isMethod:Boolean = isMethod)
+
+  /**
+    * Stores the edges to build up a state transition graph
+    */
+  var stateGraph: ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+
+  def convertStageGraph(methodLookupTable:Map[Int, Int], methodLookupTableEnd:Map[Int, Int]) {
+    stateGraph = AlgoInfo.stateGraph.map(x => x match {
+      case EdgeInfo(l, CodeNodePos(posStart), CodeNodePos(posEnd), code, waitEdge, isMethod) => {
+        EdgeInfo(l, CodeNodePos(posStart), CodeNodePos(posEnd), code, waitEdge, isMethod)
+      }
+      case EdgeInfo(l, CodeNodePos(posStart), CodeNodeMtd(methodEnd, end), code, waitEdge, isMethod) => {
+        EdgeInfo(l, CodeNodePos(posStart), CodeNodePos(if (!end) methodLookupTable(methodEnd) else methodLookupTableEnd(methodEnd)), code, waitEdge, isMethod)
+      }
+      case EdgeInfo(l, CodeNodeMtd(methodStart, end), CodeNodePos(posEnd), code, waitEdge, isMethod) => {
+        EdgeInfo(l, CodeNodePos(if (!end) methodLookupTable(methodStart) else methodLookupTableEnd(methodStart)), CodeNodePos(posEnd), code, waitEdge, isMethod)
+      }
+      case EdgeInfo(l, CodeNodeMtd(methodStart, end1), CodeNodeMtd(methodEnd, end2), code, waitEdge, isMethod) => {
+        EdgeInfo(l, CodeNodePos(if (!end1) methodLookupTable(methodStart) else methodLookupTableEnd(methodStart)), CodeNodePos(if (!end2) methodLookupTable(methodEnd) else methodLookupTableEnd(methodEnd)), code, waitEdge, isMethod)
+      }
+      case _ => throw new Exception("Invalid Edge Combination")
+    })
   }
 }
 

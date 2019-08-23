@@ -34,8 +34,12 @@ case class CallMethod[R: CodeType](methodId: Int, argss: List[List[OpenCode[_]]]
           ()
           """
 
-    AlgoInfo.merger.append((true, false))
-    AlgoInfo.merger.append((true, true))
+    AlgoInfo.stateGraph.append( AlgoInfo.EdgeInfo("Method Call ("+methodId+") f1", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodeMtd(methodId), f1))
+    AlgoInfo.nextPos
+    AlgoInfo.stateGraph.append( AlgoInfo.EdgeInfo("Method Call ("+methodId+") Method to f2", AlgoInfo.CodeNodeMtd(methodId, end=true), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), f2))
+    AlgoInfo.stateGraph.append( AlgoInfo.EdgeInfo("Method ("+methodId+") f2", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), f2))
+    AlgoInfo.nextPos
+
     List(f1, f2)
   }
 }
