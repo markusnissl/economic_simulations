@@ -2,8 +2,7 @@ package ecosim.deep.algo
 
 import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
-import ecosim.deep.member.Actor
-import simulation.core.{RequestMessage, ResponseMessage}
+import ecosim.deep.member.{Actor, RequestMessage, ResponseMessage}
 
 case class Send[R](actorFrom: OpenCode[Actor],
                    actorRef: OpenCode[Actor],

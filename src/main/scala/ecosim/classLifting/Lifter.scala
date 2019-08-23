@@ -8,7 +8,6 @@ import IR.Predef.base.MethodApplication
 import ecosim.deep.algo.{Algo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
 import ecosim.deep.codegen.{ClassCreation, InitCreation}
 import ecosim.deep.member.{Actor, ActorType, LiftedMethod, RequestMessage, State}
-import simulation.core.Actor
 import squid.ir.RuntimeSymbols.MtdSymbol
 
 /** Code lifter
