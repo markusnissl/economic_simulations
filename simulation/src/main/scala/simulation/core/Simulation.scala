@@ -2,7 +2,7 @@ package simulation.core
 
 import ecosim.deep.member.{Actor, Message}
 
-//import simulation.generated.InitData
+import simulation.generated.InitData
 
 object Simulation extends App {
 
@@ -12,7 +12,7 @@ object Simulation extends App {
   var until = 10
 
   def init(): Unit = {
-    //actors = InitData.initActors
+    actors = InitData.initActors
   }
 
   def main(): Unit = {
