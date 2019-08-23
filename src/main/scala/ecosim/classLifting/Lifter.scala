@@ -1,14 +1,11 @@
 package ecosim.classLifting
 
-import ecosim.deep._
 import ecosim.deep.IR
 import IR.Predef._
 import IR.TopLevel._
 import IR.Predef.base.MethodApplication
 import ecosim.deep.algo.{Algo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
-import ecosim.deep.codegen.{ClassCreation, InitCreation}
 import ecosim.deep.member.{Actor, ActorType, LiftedMethod, RequestMessage, State}
-import squid.ir.RuntimeSymbols.MtdSymbol
 
 /** Code lifter
   *
@@ -20,11 +17,10 @@ class Lifter {
     */
   var methodsIdMap: Map[IR.MtdSymbol, Int] = Map()
 
-  //TODO make it MtdSymbol - methodInfo
-  /** Maps method IDs to their methods' information, [[ecosim.classLifting.MethodInfo]]
+  /** Maps method symbols to their methods' information, [[ecosim.classLifting.MethodInfo]]
     *
     */
-  var methodsMap: Map[Int, MethodInfo[_]] = Map()
+  var methodsMap: Map[IR.MtdSymbol, MethodInfo[_]] = Map()
 
 
   /** Lifts the classes and object initialization
@@ -35,19 +31,18 @@ class Lifter {
     */
   def apply(startClasses: List[Clasz[_ <: Actor]], initializationClass: Clasz[_]): (List[ActorType[_]], OpenCode[List[Actor]]) = {
     var actorsInit: OpenCode[List[Actor]] = liftInitCode(initializationClass)
-    //Collecting method symbols to generate methodsIdMap
+    //Collecting method symbols and info to generate methodsIdMap and methodsMap
     var counter = 0
     startClasses.map(c => c.methods).flatten
       .foreach(method => {
           import method.A
-          import method.Scp
           methodsIdMap = methodsIdMap + (method.symbol -> counter)
           var blocking = true
           if (method.A <:< codeTypeOf[NBUnit]) blocking = false
-          methodsMap = methodsMap + (counter -> new MethodInfo[method.A](method.symbol, method.tparams, method.vparams, blocking))
+          methodsMap = methodsMap + (method.symbol -> new MethodInfo[method.A](method.symbol, method.tparams, method.vparams, blocking))
           counter += 1
       })
-
+    //lifting types
     val endTypes = startClasses.map(c => {
       liftActor(c)
     })
@@ -64,6 +59,7 @@ class Lifter {
   private def liftActor[T <: Actor](clasz: Clasz[T]) = {
     import clasz.C
     val actorSelfVariable: Variable[_ <: Actor] = clasz.self.asInstanceOf[Variable[T]]
+    //lifting states - class attributes
     var endStates: List[State[_]] = List()
     endStates = clasz.fields.map{case field => {
       import field.A
@@ -71,10 +67,11 @@ class Lifter {
     }}
     var endMethods: List[LiftedMethod[_]] = List()
     var mainAlgo: Algo[_] = Forever(Wait(code"1"))
+    //lifting methods - with main method as special case
     clasz.methods.foreach(method => {
       val cde = method.body
       val mtdBody = liftCode(cde, actorSelfVariable, clasz)
-      endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(methodsIdMap(method.symbol)).blocking, methodsIdMap(method.symbol)) {
+      endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
         override val mtd: cls.Method[Any, cls.Scp] = method.asInstanceOf[this.cls.Method[Any,cls.Scp]]
       }) :: endMethods
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
@@ -90,8 +87,10 @@ class Lifter {
     * @return - extracted initialization method body
     */
   private def liftInitCode(clasz: Clasz[_]): OpenCode[List[Actor]] = {
+    //it's expected that this class' first method initializes actors
     val initMethod = clasz.methods.head
     val initCode = clasz.methods.head.body
+    //check if the method returns a list of actors
     if (initMethod.A <:< codeTypeOf[List[Actor]])
       initCode.asInstanceOf[OpenCode[List[Actor]]]
     else {
@@ -132,12 +131,15 @@ class Lifter {
         val f = Wait(x)
         f.asInstanceOf[Algo[T]]
       case code"SpecialInstructions.handleMessages()" =>
+        //generates an IfThenElse for each of this class' methods, which checks if the called method id is the same
+        //as any of this class' methods, and calls the method if it is
         val resultMessageCall = Variable[Any]
         val p1 = Variable[RequestMessage]
         val algo: Algo[Any] = NoOp()
         val callCode = clasz.methods.foldRight(algo)((method, rest) => {
             val methodId = methodsIdMap(method.symbol)
-            val methodInfo = methodsMap(methodId)
+            val methodInfo = methodsMap(method.symbol)
+            //map method parameters correctly
             val argss: List[List[OpenCode[_]]] = methodInfo.vparams.zipWithIndex.map(x => {
               x._1.zipWithIndex.map(y => {
                 code"$p1.argss(${Const(x._2)})(${Const(y._2)})"
@@ -145,6 +147,8 @@ class Lifter {
             })
             IfThenElse(code"$p1.methodId==${Const(methodId)}", CallMethod[Any](methodId, argss), rest)
         })
+
+        //for each received message, use callCode
         val handleMessage = Foreach(
           code"$actorSelfVariable.popRequestMessages",
           p1, LetBinding(
@@ -157,22 +161,27 @@ class Lifter {
       case code"${MethodApplication(ma)}:Any" if methodsIdMap.get(ma.symbol).isDefined =>
         //extracting arguments and formatting them
         val argss = ma.args.tail.map(args => args.toList.map(arg => code"$arg")).toList
-        //method is local
+        //method is local - method recipient is this(self)
         val recipientActorVariable = ma.args.head.head.asInstanceOf[OpenCode[Actor]]
         if(actorSelfVariable == recipientActorVariable) {
           val f = CallMethod(methodsIdMap(ma.symbol), argss)
           f.asInstanceOf[Algo[T]]
         }
-        //method recipient is another actor
+        //method recipient is another actor - a message has to be sent
         else {
-          val f = Send(actorSelfVariable.toCode, recipientActorVariable, methodsIdMap(ma.symbol), argss, true) //TODO: pass blocking
+          val f = Send(actorSelfVariable.toCode, recipientActorVariable, methodsIdMap(ma.symbol), argss, methodsMap(ma.symbol).blocking)
           f.asInstanceOf[Algo[T]]
         }
       case _ =>
+        //here there is space for some more code patterns to be lifted, by using the liftCodeOther method which can be overriden
         val liftedCode = liftCodeOther(cde, actorSelfVariable, clasz)
+        //if liftCodeOther returns something, return that
         if (liftedCode.isDefined) {
           liftedCode.get
         }
+        //otherwise, analyze if the cde is legitimate ScalaCode (does not contain any other recognizable code pattern
+        // somewhere inside (e.g. an unsupported code pattern could contain a Foreach somewhere inside of it and that
+        // would cause problems if it was lifted as ScalaCode)
         else {
           cde analyse {
             case d if d != cde =>
@@ -201,22 +210,3 @@ class Lifter {
   }
 }
 
-object App1 extends App {
-  val cls1: ClassWithObject[Actor1] = Actor1.reflect(IR)
-  val cls2: ClassWithObject[Actor2] = Actor2.reflect(IR)
-  val cls3: ClassWithObject[MainClass] = MainClass.reflect(IR)
-  val startClasses: List[Clasz[_ <: Actor]] = List(cls1, cls2)
-  val mainClass = cls3
-  val lifter = new Lifter()
-  val simulationData = lifter(startClasses, mainClass)
-
-  simulationData._1.foreach({
-    case x => {
-      val cc = new ClassCreation(x, simulationData._1)
-      cc.run()
-    }
-  })
-
-  val ic = new InitCreation(simulationData._2, simulationData._1)
-  ic.run()
-}
