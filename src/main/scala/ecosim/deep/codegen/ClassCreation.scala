@@ -17,7 +17,7 @@ class ClassCreation(actorType: ActorType[_], actorTypes: List[ActorType[_]]) ext
     val self = actorType.self.toCode.toString().substring(5).dropRight(1)
     val commands = this.createLists()
     val code = this.createCommandOpenCode(commands)
-    val codeWithInit = this.generateVarInit(variables2, this.generateMutVarInit(AlgoInfo.variables,
+    val codeWithInit = this.generateVarInit(variables, this.generateMutVarInit(AlgoInfo.variables,
       code"""val ${AlgoInfo.returnValue} = MutVar(null)
               val ${AlgoInfo.positionStack} = ListBuffer[Int]()
               val ${AlgoInfo.responseMessage} = MutVar(null)
@@ -37,11 +37,13 @@ class ClassCreation(actorType: ActorType[_], actorTypes: List[ActorType[_]]) ext
           """))
     val steps = changeTypes(IR.showScala(codeWithInit.rep).replace(self, "this"))
 
+    //Needed to split, so that a function can be extracted from the code, to write everything as class variables
     val parts = steps.split("""ecosim\.deep\.algo\.Instructions\.splitter\(\);""")
     val initVars = parts(0).substring(2)
-    //val commandList = "val commands= {" + parts(1)
-    val run_until = "override def run_until" + parts(1).trim().substring(1).replaceFirst("=>", ": simulation.core.Actor = ").dropRight(1).trim.dropRight(1)
+    //This ugly syntax is needed to replace the received code with a correct function definition
+    val run_until = "override def run_until" + parts(1).trim().substring(1).replaceFirst("=>", ": ecosim.deep.member.Actor = ").dropRight(1).trim.dropRight(1)
 
+    // Converts all initParams to state variables again
     var initParams = ""
     for (s <- actorType.states) {
       initParams = initParams + "var " + s.sym.name + ": " + changeTypes(s.tpe.rep.toString) + " = " + changeTypes(IR.showScala(s.init.rep)) + "\n"
@@ -57,12 +59,18 @@ class ClassCreation(actorType: ActorType[_], actorTypes: List[ActorType[_]]) ext
     result
   }
 
+  /**
+    * Creates the class file
+    * @param initParams state variables
+    * @param initVars generated variables needed globally
+    * @param run_until function, which overrides the run until method
+    */
   def createClass(initParams: String, initVars: String, run_until: String): Unit = {
     val classString =
       s"""
           package simulation.generated
 
-          class ${actorType.name} extends simulation.core.Actor {
+          class ${actorType.name} extends ecosim.deep.member.Actor {
             ${initParams}
               ${initVars}
               ${run_until}

@@ -3,6 +3,10 @@ package ecosim.deep.algo
 import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 
+/**
+  * Increases timer by cde time
+  * @param cde amount of time to wait
+  */
 case class Wait(cde: OpenCode[Int]) extends Algo[Unit] {
 
   override def codegen: List[IR.Predef.OpenCode[Unit]] = {

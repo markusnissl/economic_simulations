@@ -1,5 +1,7 @@
 package simulation.core
 
+import ecosim.deep.member.{Actor, Message}
+
 //import simulation.generated.InitData
 
 object Simulation extends App {

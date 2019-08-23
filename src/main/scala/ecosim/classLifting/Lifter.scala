@@ -7,7 +7,7 @@ import IR.TopLevel._
 import IR.Predef.base.MethodApplication
 import ecosim.deep.algo.{Algo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
 import ecosim.deep.codegen.{ClassCreation, InitCreation}
-import ecosim.deep.member.{ActorType, LiftedMethod, State}
+import ecosim.deep.member.{Actor, ActorType, LiftedMethod, RequestMessage, State}
 import simulation.core.Actor
 import squid.ir.RuntimeSymbols.MtdSymbol
 
@@ -31,7 +31,7 @@ class Lifter {
   /** Lifts the classes and object initialization
     *
     * @param startClasses - classes that need to be lifted, in form of [[Clasz]]
-    * @param initializationClass - contains only one method, which has to return a list of [[simulation.core.Actor]]
+    * @param initializationClass - contains only one method, which has to return a list of [[Actor]]
     * @return deep embedding of the classes
     */
   def apply(startClasses: List[Clasz[_ <: Actor]], initializationClass: Clasz[_]): (List[ActorType[_]], OpenCode[List[Actor]]) = {
@@ -109,7 +109,7 @@ class Lifter {
     * @tparam T - return type of the expression
     * @return [[Algo]] - deep representation of the expression
     */
-  private def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: simulation.core.Actor]): Algo[T] = {
+  private def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: Actor]): Algo[T] = {
     cde match {
       case code"val $x: $xt = $v; $rest: T" =>
         val f = LetBinding(Some(x), liftCode(v, actorSelfVariable, clasz), liftCode(rest, actorSelfVariable, clasz))
@@ -134,7 +134,7 @@ class Lifter {
         f.asInstanceOf[Algo[T]]
       case code"SpecialInstructions.handleMessages()" =>
         val resultMessageCall = Variable[Any]
-        val p1 = Variable[simulation.core.RequestMessage]
+        val p1 = Variable[RequestMessage]
         val algo: Algo[Any] = NoOp()
         val callCode = clasz.methods.foldRight(algo)((method, rest) => {
             val methodId = methodsIdMap(method.symbol)
@@ -197,7 +197,7 @@ class Lifter {
     * @tparam T - return type of the expression
     * @return [[Algo]] - deep representation of the expression
     */
-  def liftCodeOther[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: simulation.core.Actor]): Option[Algo[T]] = {
+  def liftCodeOther[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: Actor]): Option[Algo[T]] = {
     None
   }
 }

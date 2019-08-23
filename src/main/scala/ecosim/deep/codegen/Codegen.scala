@@ -10,6 +10,12 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 abstract class Codegen(actorType: ActorType[_]) {
 
+  /**
+    * Generate the stepwise code for the given algo
+    * @param algo contains the code, which should be generated
+    * @param isMethod if true, then a restore position is added at the end
+    * @return a list of code steps
+    */
   private def createCode(algo: Algo[_], isMethod: Boolean): List[OpenCode[Unit]] = {
     AlgoInfo.merger.clear()
     var commands = algo.codegen
@@ -21,6 +27,9 @@ abstract class Codegen(actorType: ActorType[_]) {
     AlgoInfo.mergeCodes(commands, AlgoInfo.merger.toList)
   }
 
+  /**
+    * Converts a list of opencode code fragments to a opencode of list of code fragments
+    */
   def createCommandOpenCode(commands: List[OpenCode[Unit]]): OpenCode[List[() => Unit]] = {
     val start: OpenCode[List[() => Unit]] = code"List[() => Unit]()"
     commands.map(x => code"List(() => ${x})").foldLeft(start)((x, y) => code"$x ::: $y")
@@ -30,6 +39,11 @@ abstract class Codegen(actorType: ActorType[_]) {
   var methodVariableTable: collection.mutable.Map[Int, ArrayBuffer[Variable[MutVar[Any]]]] = collection.mutable.Map[Int, ArrayBuffer[Variable[MutVar[Any]]]]()
   var methodVariableTableStack: collection.mutable.Map[Int, ArrayBuffer[Variable[ListBuffer[Any]]]] = collection.mutable.Map[Int, ArrayBuffer[Variable[ListBuffer[Any]]]]()
 
+  /**
+    * Inits the methodLookupTable with the correct positions of the code
+    * @param methodData a list of tuple (methodId, length)
+    * @param currentPos current position to start filling the table with the first entry in the list
+    */
   @tailrec
   private def createMethodTable(methodData: List[(Int, Int)], currentPos: Int): Unit = methodData match {
     case (x :: xs) =>
@@ -38,6 +52,10 @@ abstract class Codegen(actorType: ActorType[_]) {
     case Nil => ()
   }
 
+  /**
+    * Inits the method variable lookup table
+    * @param data list of (methodId, list of parameter variables)
+    */
   @tailrec
   private def createVariableTable(data: List[(Int, List[Variable[MutVar[Any]]])]): Unit = data match {
     case (x :: xs) => {
@@ -47,10 +65,21 @@ abstract class Codegen(actorType: ActorType[_]) {
     case Nil => ()
   }
 
-  case class VarValue[C](val variable: Variable[C], val init: OpenCode[C])(implicit val A: CodeType[C])
+  /**
+    * This class is used to create the variable stack for each parameter variable of a method
+    * @param variable to be used in code
+    * @param init code to init variable
+    * @param A type of variable
+    * @tparam C variable type
+    */
+  case class VarValue[C](variable: Variable[C], init: OpenCode[C])(implicit val A: CodeType[C])
 
-  var variables2: List[VarValue[_]] = List()
+  var variables: List[VarValue[_]] = List()
 
+  /**
+    * Inits the stack for the method variable storage
+    * @param data foramt List[(methodId, amount of variables)]
+    */
   @tailrec
   private def createVariableTableStack(data: List[(Int, Int)]): Unit = data match {
     case (x :: xs) => {
@@ -58,7 +87,7 @@ abstract class Codegen(actorType: ActorType[_]) {
       for (i <- 0 until x._2) {
         val x = Variable[ListBuffer[Any]]
         a.append(x)
-        variables2 = VarValue(x, code"ListBuffer[Any]()") :: variables2
+        variables = VarValue(x, code"ListBuffer[Any]()") :: variables
       }
       methodVariableTableStack(x._1) = a
       createVariableTableStack(xs)
@@ -66,11 +95,26 @@ abstract class Codegen(actorType: ActorType[_]) {
     case Nil => ()
   }
 
+  /**
+    * Generates init code of one variable of type VarWrapper
+    * @param variable of type VarWrapper
+    * @param rest Code, where variables should be applied to
+    * @tparam A type of variable
+    * @tparam R return type of code
+    * @return rest with bounded variable
+    */
   private def initVar[A, R: CodeType](variable: AlgoInfo.VarWrapper[A], rest: OpenCode[R]): OpenCode[R] = {
     import variable.A
     code"val ${variable.to} = MutVar(${nullValue[A]}); $rest"
   }
 
+  /**
+    * Generates init code for variables of a list of VarWrappers
+    * @param variables list of varWrapper
+    * @param after code, where variables should be applied to
+    * @tparam R return type of code
+    * @return after with bounded variables
+    */
   def generateMutVarInit[R: CodeType](variables: List[AlgoInfo.VarWrapper[_]], after: OpenCode[R]): OpenCode[R] = variables match {
     case Nil => code"$after"
     case (x :: xs) => {
@@ -78,11 +122,25 @@ abstract class Codegen(actorType: ActorType[_]) {
     }
   }
 
+  /**
+    * Generates init code of one variable of type VarValue
+    * @param variable variable of type VarValue
+    * @param rest Code, where variables should be applied to
+    * @tparam A type of variable
+    * @tparam R return type of code
+    * @return rest with bounded variable
+    */
   private def initVar2[A, R: CodeType](variable: VarValue[A], rest: OpenCode[R]): OpenCode[R] = {
-    import variable.A
     code"val ${variable.variable} = ${variable.init}; $rest"
   }
 
+  /**
+    * generates init code for variables of list of type VarValue
+    * @param variables list of varvalue
+    * @param after code, where variables should be applied to
+    * @tparam R return type of code
+    * @return after with bounded variables
+    */
   def generateVarInit[R: CodeType](variables: List[VarValue[_]], after: OpenCode[R]): OpenCode[R] = variables match {
     case Nil => code"$after"
     case (x :: xs) => {
@@ -90,7 +148,13 @@ abstract class Codegen(actorType: ActorType[_]) {
     }
   }
 
+  /**
+    * This code generates the complete code fragments of the actor
+    * @return a list of code, containing all code fragments of main code and method codes + initialized variable tables
+    */
   def createLists(): List[OpenCode[Unit]] = {
+
+    // Generate code for methods
     val methodData = actorType.methods.map({
       case method => {
         var commands = createCode(method.body.asInstanceOf[Algo[Any]], true)
@@ -109,14 +173,18 @@ abstract class Codegen(actorType: ActorType[_]) {
       }
     })
 
+    // And then for the main
     val main = createCode(actorType.main.asInstanceOf[Algo[Any]], false)
 
+    // Fill the tables
     createMethodTable(methodData.map(x => (x._3, x._1.length)), main.length)
     createVariableTable(methodData.map(x => (x._3, x._2.toList)))
     createVariableTableStack(methodData.map(x => (x._3, x._2.length)))
 
+    // Merge code to a big list
     val mergedCommands = methodData.foldLeft(main)((a, b) => (a ::: b._1))
 
+    // Replace special code instructions, with real data, after this data has been calculated
     val replacedCommands = mergedCommands.map(x => {
       x.rewrite({
         case code"ecosim.deep.algo.Instructions.getMethodPosition(${Const(a)}) " => Const(methodLookupTable(a))

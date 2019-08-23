@@ -3,6 +3,13 @@ package ecosim.deep.member
 import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 
+/**
+  * Init states of class variables
+  * @param sym of the variable
+  * @param init code to init the variable
+  * @param tpe type of the variable
+  * @tparam A codetype of the variable
+  */
 case class State[A](sym: IR.MtdSymbol, init: OpenCode[A])(implicit val tpe: CodeType[A]) {
   override def toString = s"var ${sym.asMethodSymbol.owner.name}.${sym.asMethodSymbol.name}"
 }

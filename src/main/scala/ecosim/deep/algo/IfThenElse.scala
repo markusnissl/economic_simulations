@@ -7,6 +7,12 @@ import scala.collection.mutable.ListBuffer
 
 case class IfThenElse[A](cond: OpenCode[Boolean], ifBody: Algo[A], elseBody: Algo[A])(implicit val A: CodeType[A]) extends Algo[A] {
 
+  /**
+    * 1. Check if condition is fullfilled,
+    * 2. If yes, run if part and jump then to end of else part
+    * 3. If not jump to else start and run the code
+    * @return a list of opencode, containing individual program steps
+    */
   override def codegen: List[IR.Predef.OpenCode[Unit]] = {
     //Append for met1 before calling met2
     AlgoInfo.merger.append((true, false))
