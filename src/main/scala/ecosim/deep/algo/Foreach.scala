@@ -7,7 +7,15 @@ import squid.lib.MutVar
 import scala.collection.mutable.ListBuffer
 
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit] {
-
+  /**
+    * 1. Get iterator to iterate over list
+    * 2. As long as there is a next value, get next value and execute algo
+    * 3. If there is no next value, jump to end of the code fragment
+    *
+    * This code adds a iter variable and a list variable as needed initialization to the variables list.
+    *
+    * @return a list of opencode, containing individual program steps
+    */
   override def codegen: List[IR.Predef.OpenCode[Unit]] = {
     val iter = Variable[Iterator[E]]
     val iterMut = Variable[MutVar[Iterator[E]]]
@@ -35,7 +43,7 @@ case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E],
     AlgoInfo.merger = tmp
     AlgoInfo.mergeMerger(f3)
 
-    val f2 = code"""if($iter.hasNext) {${AlgoInfo.pushCurrent}; $listValMut := $iter.next;} else {${AlgoInfo.positionVar} := (${AlgoInfo.positionVar}!) + ${Const(f3.length)};}"""
+    val f2 = code"""if($iter.hasNext) {${AlgoInfo.pushCurrent}; $listValMut := $iter.next;} else {${AlgoInfo.jump(f3.length)};}"""
 
 
     (List(f1, f2) ::: f3).map(x => x.subs(iter).~>(code"($iterMut!)")).map(x => x.subs(variable).~>(code"($listValMut!)"))

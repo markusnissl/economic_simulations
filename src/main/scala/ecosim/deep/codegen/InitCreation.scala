@@ -4,9 +4,14 @@ import java.io.{BufferedWriter, File, FileWriter}
 
 import ecosim.deep.IR.Predef._
 import ecosim.deep.IR
-import ecosim.deep.member.ActorType
+import ecosim.deep.member.{Actor, ActorType}
 
-class InitCreation(code: OpenCode[Any], actorTypes: List[ActorType[_]]) {
+/**
+  * This creates an init object creating the init actor instances of the simulation
+  * @param code list of actors, which should be used when starting the simulation
+  * @param actorTypes all actorTypes that are created inside code
+  */
+class InitCreation(code: OpenCode[List[Actor]], actorTypes: List[ActorType[_]]) {
 
   def run(): Unit = {
     createObject(IR.showScala(code.rep))
@@ -18,7 +23,7 @@ class InitCreation(code: OpenCode[Any], actorTypes: List[ActorType[_]]) {
           package simulation.generated
 
           object InitData  {
-            def initActors: List[simulation.core.Actor] = {${changeTypes(code)}}
+            def initActors: List[ecosim.deep.member.Actor] = {${changeTypes(code)}}
           }
         """
     val file = new File("simulation/src/main/scala/simulation/generated/InitData.scala")

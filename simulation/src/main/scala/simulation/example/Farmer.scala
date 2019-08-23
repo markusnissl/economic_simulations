@@ -1,6 +1,6 @@
 package simulation.example
 
-import simulation.core.Actor
+import ecosim.deep.member.Actor
 import squid.quasi.lift
 import ecosim.classLifting.SpecialInstructions._
 

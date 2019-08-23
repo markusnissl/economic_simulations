@@ -1,12 +1,12 @@
 package ecosim.example
 
 import ecosim.deep.codegen.{ClassCreation, InitCreation}
-import simulation.core.Actor
 import simulation.example.{Farmer, InitClass, Market}
 import ecosim.classLifting.Lifter
 import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 import ecosim.deep.IR.TopLevel._
+import ecosim.deep.member.Actor
 
 object LifterCodegenExample extends App {
   val cls1: ClassWithObject[Market] = Market.reflect(IR)

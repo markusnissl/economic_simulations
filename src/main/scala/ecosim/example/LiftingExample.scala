@@ -4,7 +4,7 @@ import ecosim.classLifting.{Lifter, NBUnit, SpecialInstructions}
 import ecosim.deep.IR
 import ecosim.deep.IR.TopLevel._
 import ecosim.deep.codegen.{ClassCreation, InitCreation}
-import simulation.core.Actor
+import ecosim.deep.member.Actor
 import squid.quasi._
 
 //TODO: make a new annotation for main method?

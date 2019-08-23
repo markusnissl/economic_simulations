@@ -6,6 +6,12 @@ import squid.lib.MutVar
 
 case class Forever(body: Algo[_]) extends Algo[Unit] {
 
+  /**
+    * 1. Save current position
+    * 2. Execute body
+    * 3. Jump to position saved in 1
+    * @return a list of opencode, containing individual program steps
+    */
   override def codegen: List[IR.Predef.OpenCode[Unit]] = {
 
     AlgoInfo.merger.append((false, true))
