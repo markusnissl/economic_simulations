@@ -7,7 +7,6 @@ import ecosim.deep.algo.{Algo, CallMethod, Foreach, Forever, IfThenElse, LetBind
 import ecosim.deep.codegen.{ClassCreation, InitCreation}
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
 import simulation.example.{Farmer, Market}
-import squid.quasi.lift
 
 object CodegenExample extends App {
 

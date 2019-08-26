@@ -208,8 +208,9 @@ abstract class Codegen(actorType: ActorType[_]) {
 
     AlgoInfo.convertStageGraph(methodLookupTable.toMap, methodLookupTableEnd.toMap)
 
+    drawGraph("original")
     optimizeCode(mergedCommands.length)
-    drawGraph()
+    drawGraph("commandmerged")
 
 
 
@@ -254,16 +255,70 @@ abstract class Codegen(actorType: ActorType[_]) {
     val outgoing = m.map(_.sum)
     val incoming = m.transpose.map(_.sum)
 
+    var counter = 0
 
-    println(m.map(_.mkString(",")).mkString("\n"))
+    val groupedGraphStart = AlgoInfo.stateGraph.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
+    val groupedGraphEnd = AlgoInfo.stateGraph.groupBy(_.to.asInstanceOf[CodeNodePos].pos)
 
-    println("---")
-    println(outgoing.mkString(","))
-    println(incoming.mkString(","))
+    case class MergeInfo(startNode: Int, middleNode: Int, endNode: Int)
+    var mergeList:List[MergeInfo] = List()
+
+    /** The code is executed between two nodes:
+      * This means, that code can be merged between 3 nodes if following is fullfilled:
+      * Node 2: Has exactly one outgoing and one incoming edge and the incoming edge is not a wait
+      * Extra: I am not allowed to merge with the next code, if a cycle is created
+      */
+    // TODO Extra: I am not allowed to merge with the next code, if a cycle is created (since wait required somewhere currently skipped)
+
+
+    //This loops check, if it is possible to merge with the next node
+    while (counter < m.length) {
+      if (incoming(counter) == 1 && outgoing(counter) == 1) {
+        if (!groupedGraphEnd(counter)(0).waitEdge) {
+          mergeList = MergeInfo(groupedGraphEnd(counter)(0).from.asInstanceOf[CodeNodePos].pos,counter, groupedGraphStart(counter)(0).to.asInstanceOf[CodeNodePos].pos):: mergeList
+        }
+      }
+      counter += 1
+    }
+
+    mergeList = mergeList.sortBy(_.startNode)
+    var replacedNodes: Map[Int, Int] = Map()
+
+    for (entryOriginal <- mergeList) {
+      var entry = entryOriginal
+      val replacedNodeStart = replacedNodes.get(entry.startNode)
+      val replacedNodeEnd = replacedNodes.get(entry.endNode)
+
+      //Change pointer to correct node, if already replaced
+      if (replacedNodeStart.isDefined && replacedNodeEnd.isDefined) {
+        entry = MergeInfo(replacedNodeStart.get, entryOriginal.middleNode, replacedNodeEnd.get)
+      } else if (replacedNodeStart.isDefined) {
+        entry = MergeInfo(replacedNodeStart.get, entryOriginal.middleNode, entryOriginal.endNode)
+      } else  if (replacedNodeEnd.isDefined) {
+        entry = MergeInfo(entryOriginal.startNode, entryOriginal.middleNode, replacedNodeEnd.get)
+      }
+
+      //isMethod is not relevant anymore, just interessted in first graph for different color
+      // Create a new edgeInfo
+      val firstEdge:EdgeInfo = groupedGraphStart(entry.startNode).find(_.to.asInstanceOf[CodeNodePos].pos == entry.middleNode).get
+      val secondEdge:EdgeInfo = groupedGraphStart(entry.middleNode)(0)
+      val newNode:EdgeInfo = EdgeInfo(firstEdge.label + " " + secondEdge.label, firstEdge.from, secondEdge.to, code"${firstEdge.code}; ${secondEdge.code}", secondEdge.waitEdge, false)
+
+      // Remove old edgeInfo and inserted new created ones
+      groupedGraphStart(entry.startNode).remove(groupedGraphStart(entry.startNode).indexOf(firstEdge))
+      groupedGraphStart(entry.middleNode).remove(0)
+      groupedGraphStart(entry.startNode).append(newNode)
+
+      //Keep references of replaced nodes updated
+      replacedNodes = replacedNodes + (entry.middleNode -> entry.startNode)
+      replacedNodes.mapValues(x => if (x == entry.middleNode) entry.startNode else x)
+    }
+
+    AlgoInfo.stateGraph = groupedGraphStart.foldLeft(ArrayBuffer[EdgeInfo]())((a,b) => {a.appendAll(b._2); a})
   }
 
 
-  def drawGraph(): Unit = {
+  def drawGraph(suffix:String = ""): Unit = {
     var g: Graph = Factory.graph("ExecutionGraph")
       .directed().graphAttr()
       .`with`(RankDir.LEFT_TO_RIGHT)
@@ -286,7 +341,7 @@ abstract class Codegen(actorType: ActorType[_]) {
 
     val gviz = Graphviz.fromGraph(g)
 
-    gviz.render(Format.PNG).toFile(new File("debug/graph_" + actorType.name + ".png"));
+    gviz.render(Format.PNG).toFile(new File("debug/graph_" + actorType.name + "_" + suffix + ".png"));
   }
 
   def run(): Unit
