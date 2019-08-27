@@ -10,7 +10,7 @@ case class Send[R](actorFrom: OpenCode[Actor],
                    argss: List[List[OpenCode[_]]],
                    blocking: Boolean)(implicit val R: CodeType[R]) extends Algo[R] {
 
-  override def codegen: List[IR.Predef.OpenCode[Unit]] = {
+  override def codegen: Unit = {
     val methodIdC = Const(methodId)
 
     // Convert arguments to opencode, so hat the can be used as argument inside of OpenCode
@@ -44,7 +44,7 @@ case class Send[R](actorFrom: OpenCode[Actor],
                         ${AlgoInfo.timeVar} := (${AlgoInfo.timeVar}!) + 1;
                         ()
                       """
-      val f3: OpenCode[Unit] = code"""if((${AlgoInfo.responseMessage}!) == null) {${AlgoInfo.jump(-2)}}; ()"""
+      val f3: OpenCode[Unit] = code"""()"""
       val f4: OpenCode[Unit] =
         code"""
                        ${AlgoInfo.returnValue} := (${AlgoInfo.responseMessage}!).arg;
@@ -55,13 +55,11 @@ case class Send[R](actorFrom: OpenCode[Actor],
       AlgoInfo.nextPos
       AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f2",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f2, waitEdge = true))
       AlgoInfo.nextPos
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f3))
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 no result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter-1), f3))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f3, cond=code"(${AlgoInfo.responseMessage}!) != null"))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 no result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter-1), f3, cond=code"(${AlgoInfo.responseMessage}!) == null"))
       AlgoInfo.nextPos
       AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f4",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f4))
       AlgoInfo.nextPos
-
-      List(f1, f2, f3, f4)
     } else {
       val f1: OpenCode[Unit] =
         code"""
@@ -74,7 +72,6 @@ case class Send[R](actorFrom: OpenCode[Actor],
               """
       AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send nb f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1))
       AlgoInfo.nextPos
-      List(f1)
     }
   }
 }

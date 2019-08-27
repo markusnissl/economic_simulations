@@ -12,7 +12,7 @@ import ecosim.deep.IR.Predef._
 abstract class Algo[A](implicit val tpe: CodeType[A]) {
   /**
     * Generates appropriate code for the statement
-    * @return a list of opencode, containing individual program steps
+    * You have to add the code segments into the AlgoInfo.stateGraph
     */
-  def codegen: List[OpenCode[Unit]]
+  def codegen: Unit
 }

@@ -64,7 +64,7 @@ object CodegenExample extends App {
     val bindingTest = Variable[Int]
 
     val market = ActorType[Market]("Market",
-      State[List[String]](IR.methodSymbol[Market]("goods"), code"Nil") :: Nil,
+      State[List[String]](IR.methodSymbol[Market]("goods"), codeTypeOf[List[String]], code"Nil") :: Nil,
       marketFunctions,
       LetBinding(Option(bindingTest), ScalaCode[Int](code"0"),
         Forever(
@@ -121,9 +121,9 @@ object CodegenExample extends App {
 
 
     val farmer = ActorType[Farmer]("Farmer",
-      State[Market](IR.methodSymbol[Farmer]("market"), nullValue[Market].asOpenCode) ::
-        State[Int](IR.methodSymbol[Farmer]("happiness"), code"0") ::
-        State[List[Farmer]](IR.methodSymbol[Farmer]("peers"), code"Nil") :: Nil,
+      State[Market](IR.methodSymbol[Farmer]("market"), codeTypeOf[Market], nullValue[Market].asOpenCode) ::
+        State[Int](IR.methodSymbol[Farmer]("happiness"), codeTypeOf[Int], code"0") ::
+        State[List[Farmer]](IR.methodSymbol[Farmer]("peers"), codeTypeOf[List[Farmer]], code"Nil") :: Nil,
       tell :: nofifyPeers :: Nil,
       Forever(
         LetBinding(None,

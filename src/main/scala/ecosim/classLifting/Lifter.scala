@@ -63,7 +63,7 @@ class Lifter {
     var endStates: List[State[_]] = List()
     endStates = clasz.fields.map{case field => {
       import field.A
-      State(field.symbol, field.init)
+      State(field.symbol, field.A, field.init)
     }}
     var endMethods: List[LiftedMethod[_]] = List()
     var mainAlgo: Algo[_] = Forever(Wait(code"1"))

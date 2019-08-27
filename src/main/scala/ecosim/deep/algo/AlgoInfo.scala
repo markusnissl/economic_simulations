@@ -84,7 +84,7 @@ object AlgoInfo {
   /**
     * Helper, for restoring the position in the stack
     */
-  val restorePosition = code"""$positionVar := ($positionStack.remove(0) - 1); ()"""
+  val restorePosition = code"""$positionVar := $positionStack.remove(0); ()"""
 
 
   /**
@@ -96,7 +96,7 @@ object AlgoInfo {
     * Go to next code fragment
     */
   def nextPos {
-    posCounter+=1
+    posCounter += 1
   }
 
   /**
@@ -108,6 +108,7 @@ object AlgoInfo {
 
   /**
     * Node for a position in code
+    *
     * @param pos id of posCounter
     */
   case class CodeNodePos(pos: Int) extends CodeNode {
@@ -120,11 +121,12 @@ object AlgoInfo {
 
   /**
     * method id, which should reference the node to
-    * @param id methodId, which node should be referenced
+    *
+    * @param id  methodId, which node should be referenced
     * @param end if node is start or end of method
     */
-  case class CodeNodeMtd(id: Int, end:Boolean=false) extends CodeNode {
-    override def getId: String = "M"+id+(if (end) "E" else "")
+  case class CodeNodeMtd(id: Int, end: Boolean = false) extends CodeNode {
+    override def getId: String = "M" + id + (if (end) "E" else "")
   }
 
   /**
@@ -134,36 +136,55 @@ object AlgoInfo {
 
   /**
     * Models an edge between to nodes
-    * @param label a random name, which is displayed when drawing the graph
-    * @param from start node
-    * @param to end node
-    * @param code actual code, which is executed when
+    *
+    * @param label    a random name, which is displayed when drawing the graph
+    * @param from     start node
+    * @param to       end node
+    * @param code     actual code, which is executed when
     * @param waitEdge an information, that this edge is increasing the timer
     * @param isMethod is filled out automatically by using the isMethod vaiable of this class
     */
-  case class EdgeInfo(label: String, from: CodeNode, to: CodeNode, code: OpenCode[Unit], waitEdge:Boolean = false, isMethod:Boolean = isMethod)
+  case class EdgeInfo(label: String,
+                      var from: CodeNode,
+                      var to: CodeNode,
+                      code: OpenCode[Unit],
+                      waitEdge: Boolean = false,
+                      isMethod: Boolean = isMethod,
+                      cond: OpenCode[Boolean] = null,
+                      var storePosRef: List[EdgeInfo] = Nil) {
+
+    def convertToPosOnly (methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]): Unit = {
+      from match {
+        case CodeNodeMtd(methodId, end) => {
+          if (!end) {
+            from = CodeNodePos(methodLookupTable(methodId))
+          } else {
+            from = CodeNodePos(methodLookupTableEnd(methodId))
+          }
+        }
+        case CodeNodePos(_) => {}
+      }
+
+      to match {
+        case CodeNodeMtd(methodId, end) => {
+          if (!end) {
+            to = CodeNodePos(methodLookupTable(methodId))
+          } else {
+            to = CodeNodePos(methodLookupTableEnd(methodId))
+          }
+        }
+        case CodeNodePos(_) => {}
+      }
+    }
+  }
 
   /**
     * Stores the edges to build up a state transition graph
     */
   var stateGraph: ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
 
-  def convertStageGraph(methodLookupTable:Map[Int, Int], methodLookupTableEnd:Map[Int, Int]) {
-    stateGraph = AlgoInfo.stateGraph.map(x => x match {
-      case EdgeInfo(l, CodeNodePos(posStart), CodeNodePos(posEnd), code, waitEdge, isMethod) => {
-        EdgeInfo(l, CodeNodePos(posStart), CodeNodePos(posEnd), code, waitEdge, isMethod)
-      }
-      case EdgeInfo(l, CodeNodePos(posStart), CodeNodeMtd(methodEnd, end), code, waitEdge, isMethod) => {
-        EdgeInfo(l, CodeNodePos(posStart), CodeNodePos(if (!end) methodLookupTable(methodEnd) else methodLookupTableEnd(methodEnd)), code, waitEdge, isMethod)
-      }
-      case EdgeInfo(l, CodeNodeMtd(methodStart, end), CodeNodePos(posEnd), code, waitEdge, isMethod) => {
-        EdgeInfo(l, CodeNodePos(if (!end) methodLookupTable(methodStart) else methodLookupTableEnd(methodStart)), CodeNodePos(posEnd), code, waitEdge, isMethod)
-      }
-      case EdgeInfo(l, CodeNodeMtd(methodStart, end1), CodeNodeMtd(methodEnd, end2), code, waitEdge, isMethod) => {
-        EdgeInfo(l, CodeNodePos(if (!end1) methodLookupTable(methodStart) else methodLookupTableEnd(methodStart)), CodeNodePos(if (!end2) methodLookupTable(methodEnd) else methodLookupTableEnd(methodEnd)), code, waitEdge, isMethod)
-      }
-      case _ => throw new Exception("Invalid Edge Combination")
-    })
+  def convertStageGraph(methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]) {
+    AlgoInfo.stateGraph.foreach(_.convertToPosOnly(methodLookupTable, methodLookupTableEnd))
   }
 }
 

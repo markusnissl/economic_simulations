@@ -30,7 +30,6 @@ class ClassCreation(actorType: ActorType[_], actorTypes: List[ActorType[_]]) ext
                 while ((${AlgoInfo.timeVar}!) <= until && (${AlgoInfo.positionVar}!) < commands.length) {
                   val command = commands((${AlgoInfo.positionVar}!))
                   command()
-                  ${AlgoInfo.positionVar} := (${AlgoInfo.positionVar}!) + 1
                 }
                 ${actorType.self}
               }

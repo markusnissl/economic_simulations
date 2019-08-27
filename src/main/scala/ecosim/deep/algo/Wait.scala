@@ -9,10 +9,9 @@ import ecosim.deep.IR.Predef._
   */
 case class Wait(cde: OpenCode[Int]) extends Algo[Unit] {
 
-  override def codegen: List[IR.Predef.OpenCode[Unit]] = {
+  override def codegen: Unit = {
     val met: OpenCode[Unit] = code"${AlgoInfo.timeVar} := (${AlgoInfo.timeVar}!) + $cde; ()"
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("wait met", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), met, waitEdge = true))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("wait", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), met, waitEdge = true))
     AlgoInfo.nextPos
-    List(met)
   }
 }

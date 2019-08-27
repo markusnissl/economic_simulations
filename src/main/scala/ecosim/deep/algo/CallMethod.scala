@@ -2,10 +2,11 @@ package ecosim.deep.algo
 
 import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
+import ecosim.deep.algo.AlgoInfo.EdgeInfo
 
 case class CallMethod[R: CodeType](methodId: Int, argss: List[List[OpenCode[_]]]) extends Algo[R] {
 
-  override def codegen: List[IR.Predef.OpenCode[Unit]] = {
+  override def codegen: Unit = {
     val initParam:OpenCode[Any] = code"()"
 
     val flattendArgs = argss.flatten
@@ -18,11 +19,9 @@ case class CallMethod[R: CodeType](methodId: Int, argss: List[List[OpenCode[_]]]
     // 3. Set new parameter into registers
     // 4. Jump to method
     val f1: OpenCode[Unit] =
-      code"""${AlgoInfo.pushNext};
+      code"""
                  $saveMethodParamsList;
                  $setMethodParamsList;
-
-                 ${AlgoInfo.positionVar} := (Instructions.getMethodPosition(${Const(methodId)}) - 1);
                  ()
             """
     // 5. Method will return to position pushed on stack and contain returnValue
@@ -34,12 +33,13 @@ case class CallMethod[R: CodeType](methodId: Int, argss: List[List[OpenCode[_]]]
           ()
           """
 
-    AlgoInfo.stateGraph.append( AlgoInfo.EdgeInfo("Method Call ("+methodId+") f1", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodeMtd(methodId), f1))
+    val a2 = AlgoInfo.EdgeInfo("Method Call ("+methodId+") Method to f2", AlgoInfo.CodeNodeMtd(methodId, end=true), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), code"()")
+
+    val a1 = AlgoInfo.EdgeInfo("Method Call ("+methodId+") f1", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodeMtd(methodId), f1, storePosRef = List(a2))
+    AlgoInfo.stateGraph.append(a1)
     AlgoInfo.nextPos
-    AlgoInfo.stateGraph.append( AlgoInfo.EdgeInfo("Method Call ("+methodId+") Method to f2", AlgoInfo.CodeNodeMtd(methodId, end=true), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), f2))
+    AlgoInfo.stateGraph.append(a2)
     AlgoInfo.stateGraph.append( AlgoInfo.EdgeInfo("Method ("+methodId+") f2", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), f2))
     AlgoInfo.nextPos
-
-    List(f1, f2)
   }
 }

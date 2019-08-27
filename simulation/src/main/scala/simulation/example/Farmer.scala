@@ -6,9 +6,9 @@ import ecosim.classLifting.SpecialInstructions._
 
 @lift
 class Farmer() extends Actor {
-  var happiness: Int = new Integer(1)
+  var happiness: Int = 1:Int
   var peers: List[Farmer] = List[Farmer]()
-  var market: Market = new Market()
+  var market: Market = null:Market
 
   def tell(actor: Actor, h: Int): Unit = {
     happiness = happiness - h

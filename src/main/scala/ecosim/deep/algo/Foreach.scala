@@ -14,9 +14,8 @@ case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E],
     *
     * This code adds a iter variable and a list variable as needed initialization to the variables list.
     *
-    * @return a list of opencode, containing individual program steps
     */
-  override def codegen: List[IR.Predef.OpenCode[Unit]] = {
+  override def codegen: Unit = {
     val iter = Variable[Iterator[E]]
     val iterMut = Variable[MutVar[Iterator[E]]]
     val listValMut = Variable[MutVar[E]]
@@ -33,18 +32,13 @@ case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E],
     val tmpPos = AlgoInfo.posCounter
     AlgoInfo.nextPos
 
+    f.codegen
 
-    // sub-merging here required because of f3.length access to jump to correct position
-    val f3_0 = AlgoInfo.restorePosition
-    val f3 = f.codegen ::: List(f3_0)
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f3_0",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(tmpPos), f3_0))
-    AlgoInfo.nextPos
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 if",AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(tmpPos+1), code"$listValMut := $iter.next; ()", cond=code"$iter.hasNext"))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 else",AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), code"()", cond=code"!($iter.hasNext)"))
 
-    val f2 = code"""if($iter.hasNext) {${AlgoInfo.pushCurrent}; $listValMut := $iter.next;} else {${AlgoInfo.jump(f3.length)};}"""
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 if",AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(tmpPos+1), f2))
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 else",AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), f2))
-
-    (List(f1, f2) ::: f3).map(x => x.subs(iter).~>(code"($iterMut!)")).map(x => x.subs(variable).~>(code"($listValMut!)"))
+    //TODO: var replacement
+    //(List(f1, f2) ::: f3).map(x => x.subs(iter).~>(code"($iterMut!)")).map(x => x.subs(variable).~>(code"($listValMut!)"))
   }
 
 }
