@@ -6,7 +6,7 @@ import squid.lib.MutVar
 
 import scala.collection.mutable.ListBuffer
 
-case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit] {
+case class Foreach[E, R](ls: OpenCode[List[E]], variable: Variable[E], var f: Algo[R])(implicit val E: CodeType[E], implicit val R: CodeType[R]) extends Algo[Unit] {
   /**
     * 1. Get iterator to iterate over list
     * 2. As long as there is a next value, get next value and execute algo

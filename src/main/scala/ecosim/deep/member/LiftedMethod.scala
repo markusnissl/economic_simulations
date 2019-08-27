@@ -15,12 +15,11 @@ import ecosim.deep.algo.Algo
   * @param R return type of method
   * @tparam R type of return value
   */
-abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], val body: Algo[R], val blocking: Boolean, val methodId:Int)(implicit val R:CodeType[R]) {
+abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], var body: Algo[R], val blocking: Boolean, val methodId:Int)(implicit val R:CodeType[R]) {
   def sym: IR.MtdSymbol = mtd.symbol
-
+  var body2: Algo[R] = _
   val mtd: cls.Method[R, cls.Scp]
-
-
+  var actorType: ActorType[_ <: Actor] = null
   override def hashCode() = sym.hashCode()
 
   override def equals(that: Any) = that match {

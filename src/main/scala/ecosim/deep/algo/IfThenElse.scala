@@ -5,7 +5,7 @@ import ecosim.deep.IR.Predef._
 
 import scala.collection.mutable.ListBuffer
 
-case class IfThenElse[A](cond: OpenCode[Boolean], ifBody: Algo[A], elseBody: Algo[A])(implicit val A: CodeType[A]) extends Algo[A] {
+case class IfThenElse[A](cond: OpenCode[Boolean], var ifBody: Algo[A], var elseBody: Algo[A])(implicit val A: CodeType[A]) extends Algo[A] {
 
   /**
     * 1. Check if condition is fullfilled,

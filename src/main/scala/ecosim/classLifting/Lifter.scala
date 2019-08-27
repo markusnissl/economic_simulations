@@ -29,7 +29,7 @@ class Lifter {
     * @param initializationClass - contains only one method, which has to return a list of [[Actor]]
     * @return deep embedding of the classes
     */
-  def apply(startClasses: List[Clasz[_ <: Actor]], initializationClass: Clasz[_]): (List[ActorType[_]], OpenCode[List[Actor]]) = {
+  def apply(startClasses: List[Clasz[_ <: Actor]], initializationClass: Clasz[_]): (List[ActorType[_ <: Actor]], OpenCode[List[Actor]]) = {
     var actorsInit: OpenCode[List[Actor]] = liftInitCode(initializationClass)
     //Collecting method symbols and info to generate methodsIdMap and methodsMap
     var counter = 0
@@ -53,7 +53,7 @@ class Lifter {
   /** Lifts a specific [[Actor]] class into an ActorType
     *
     * @param clasz representation of class which extends [[Actor]]
-    * @tparam T - type of actor
+    * @tparam T - type of actorType
     * @return an [[ActorType]] - deep embedding of an [[Actor]] class
     */
   private def liftActor[T <: Actor](clasz: Clasz[T]) = {
@@ -62,6 +62,7 @@ class Lifter {
     //lifting states - class attributes
     var endStates: List[State[_]] = List()
     endStates = clasz.fields.map{case field => {
+      //FIXME doesnt give a good type for field if it isnt initialized (it will give type null)
       import field.A
       State(field.symbol, field.init)
     }}
@@ -71,17 +72,19 @@ class Lifter {
     clasz.methods.foreach(method => {
       val cde = method.body
       val mtdBody = liftCode(cde, actorSelfVariable, clasz)
-      endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
+      endMethods = new LiftedMethod[Any](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
         override val mtd: cls.Method[Any, cls.Scp] = method.asInstanceOf[this.cls.Method[Any,cls.Scp]]
-      }) :: endMethods
+      } :: endMethods
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
         mainAlgo = mtdBody
       }
     })
-    ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
+    var actorType = ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
+    actorType.methods.foreach(method => method.actorType = actorType)
+    actorType
   }
 
-  /** Lifts the code for actor initialization
+  /** Lifts the code for actorType initialization
     *
     * @param clasz - initialization class representation - must contain only 1 method, which returns an [[OpenCode]] of list of [[Actor]]s
     * @return - extracted initialization method body
@@ -102,7 +105,7 @@ class Lifter {
   /** Lifts an [[OpenCode]](expression) into its deep representation [[Algo]]
     *
     * @param cde - an [[OpenCode]] that will be lifted
-    * @param actorSelfVariable - a self [[Variable]] of this actor, used to create messages
+    * @param actorSelfVariable - a self [[Variable]] of this actorType, used to create messages
     * @param clasz - representatation of the [[Actor]] type, used to create a message handler for his methods
     * @tparam T - return type of the expression
     * @return [[Algo]] - deep representation of the expression
@@ -167,7 +170,7 @@ class Lifter {
           val f = CallMethod(methodsIdMap(ma.symbol), argss)
           f.asInstanceOf[Algo[T]]
         }
-        //method recipient is another actor - a message has to be sent
+        //method recipient is another actorType - a message has to be sent
         else {
           val f = Send(actorSelfVariable.toCode, recipientActorVariable, methodsIdMap(ma.symbol), argss, methodsMap(ma.symbol).blocking)
           f.asInstanceOf[Algo[T]]
@@ -200,7 +203,7 @@ class Lifter {
   /** Used for operations that were not covered in [[liftCode]]. Lifts an [[OpenCode]](expression) into its deep representation [[Algo]]
     *
     * @param cde - an [[OpenCode]] that will be lifted
-    * @param actorSelfVariable - a self [[Variable]] of this actor, used to create messages
+    * @param actorSelfVariable - a self [[Variable]] of this actorType, used to create messages
     * @param clasz - representatation of the [[Actor]] type, used to create a message handler for his methods
     * @tparam T - return type of the expression
     * @return [[Algo]] - deep representation of the expression

@@ -1,13 +1,13 @@
 package ecosim.classLifting
 
 object SpecialInstructions {
-  /** makes the actor wait for a number of turns
+  /** makes the actorType wait for a number of turns
     *
     * usage - make actors of different granularity size
     * @param turns - number of turns to wait
     */
   def waitTurns(turns: Int) = ???
 
-  /** makes the actor handle all received messages */
+  /** makes the actorType handle all received messages */
   def handleMessages() = ???
 }

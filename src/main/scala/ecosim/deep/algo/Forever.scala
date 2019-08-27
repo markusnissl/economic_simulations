@@ -4,7 +4,7 @@ import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 import squid.lib.MutVar
 
-case class Forever(body: Algo[_]) extends Algo[Unit] {
+case class Forever[R: CodeType](var body: Algo[R])(implicit val R: CodeType[R]) extends Algo[Unit] {
 
   /**
     * 1. Save current position
