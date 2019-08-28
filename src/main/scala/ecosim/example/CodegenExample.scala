@@ -3,10 +3,13 @@ package ecosim.example
 import ecosim.deep.IR
 import ecosim.deep.IR.TopLevel._
 import ecosim.deep.IR.Predef._
-import ecosim.deep.algo.{Algo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
-import ecosim.deep.codegen.{ClassCreation, InitCreation}
+import ecosim.deep.algo.AlgoInfo.EdgeInfo
+import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
+import ecosim.deep.codegen.{ClassCreation, GraphDrawing, InitCreation, MergeActors}
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
 import simulation.example.{Farmer, Market}
+
+import scala.collection.mutable.ArrayBuffer
 
 object CodegenExample extends App {
 
@@ -152,12 +155,24 @@ object CodegenExample extends App {
 
   val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType :: Nil
 
+  var graphs: Map[String, ArrayBuffer[EdgeInfo]] = Map()
+
   actorTypes.foreach({
     case x => {
       val cc = new ClassCreation(x, actorTypes)
       cc.run()
+      graphs = graphs + (x.name -> AlgoInfo.stateGraph.clone())
     }
   })
+
+  val wGM = MergeActors.waitGraph(graphs("Market"))
+  GraphDrawing.drawGraph(wGM,"market_waitGraph")
+
+  val wGF = MergeActors.waitGraph(graphs("Farmer"))
+  GraphDrawing.drawGraph(wGF,"farmer_waitGraph")
+
+  val mGMF = MergeActors.generateMergedStateMachine(wGM, wGF)
+  GraphDrawing.drawGraph(mGMF,"farmer_market_mergedGraph")
 
   val ic = new InitCreation(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)""", actorTypes)
   ic.run()

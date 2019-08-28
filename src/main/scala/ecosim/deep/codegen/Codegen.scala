@@ -207,10 +207,9 @@ abstract class Codegen(actorType: ActorType[_]) {
 
     AlgoInfo.convertStageGraph(methodLookupTable.toMap, methodLookupTableEnd.toMap)
 
-    drawGraph("original")
+    GraphDrawing.drawGraph(AlgoInfo.stateGraph, actorType.name + "_original")
     optimizeCode()
-    drawGraph("commandmerged")
-
+    GraphDrawing.drawGraph(AlgoInfo.stateGraph, actorType.name + "_commandmerged")
 
     val mergedCommands = generateCode()
 
@@ -356,8 +355,6 @@ abstract class Codegen(actorType: ActorType[_]) {
       y
     })
 
-    println(code)
-
     code.toList
   }
 
@@ -456,36 +453,6 @@ abstract class Codegen(actorType: ActorType[_]) {
   }
 
 
-  /**
-    * This functions draws the graph of the connected edges
-    * Saves the file in a debug directory
-    * @param suffix some suffix to make file name unique
-    */
-  def drawGraph(suffix: String = ""): Unit = {
-    var g: Graph = Factory.graph("ExecutionGraph")
-      .directed().graphAttr()
-      .`with`(RankDir.LEFT_TO_RIGHT)
-
-    AlgoInfo.stateGraph.groupBy(_.from.getId).foreach(y => {
-      // It is required to create each node only once, otherwise some links get lost
-      var nStart = Factory.node(y._1)
-      y._2.foreach(x => {
-        if (x.waitEdge) {
-          nStart = nStart.link(Factory.to(Factory.node(x.to.getId)).`with`(Color.RED).`with`(Label.of(x.label)))
-        } else if (x.isMethod) {
-          nStart = nStart.link(Factory.to(Factory.node(x.to.getId)).`with`(Color.BLUE).`with`(Label.of(x.label)))
-        } else {
-          nStart = nStart.link(Factory.to(Factory.node(x.to.getId)).`with`(Color.BLACK).`with`(Label.of(x.label)))
-        }
-      })
-      g = g.`with`(nStart)
-    })
-
-
-    val gviz = Graphviz.fromGraph(g)
-
-    gviz.render(Format.PNG).toFile(new File("debug/graph_" + actorType.name + "_" + suffix + ".png"));
-  }
 
   def run(): Unit
 
