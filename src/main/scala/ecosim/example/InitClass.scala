@@ -1,4 +1,4 @@
-package simulation.example
+package ecosim.example
 
 import ecosim.deep.member.Actor
 import squid.quasi.lift

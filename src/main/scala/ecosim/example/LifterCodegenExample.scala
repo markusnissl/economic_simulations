@@ -1,7 +1,7 @@
 package ecosim.example
 
 import ecosim.deep.codegen.{ClassCreation, InitCreation}
-import simulation.example.{Farmer, InitClass, Market}
+import ecosim.example.Market
 import ecosim.classLifting.Lifter
 import ecosim.deep.IR
 import ecosim.deep.IR.Predef._

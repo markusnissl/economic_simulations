@@ -1,8 +1,8 @@
-package simulation.example
+package ecosim.example
 
+import ecosim.classLifting.SpecialInstructions._
 import ecosim.deep.member.Actor
 import squid.quasi.lift
-import ecosim.classLifting.SpecialInstructions._
 
 @lift
 class Farmer() extends Actor {

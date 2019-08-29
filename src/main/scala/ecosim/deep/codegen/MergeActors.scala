@@ -15,6 +15,7 @@ object MergeActors {
     val graphStart = graph.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
     val newGraph:ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
     var startNodes:List[Int] = List()
+    var edgeList = List[(Int, Int)]()
 
     def waitGraphInner(currentNode: Int, edgeInfo: EdgeInfo, visited: List[Int]): Unit = {
       //We are looping
@@ -31,26 +32,27 @@ object MergeActors {
 
       val startNode = graphStart(currentNode)
       startNode.foreach(edge => {
-        var newEdgeInfo = edge
+        //Remove all data about the node, make it as abstract as possible
+        val edgeTargetPos = edge.to.asInstanceOf[CodeNodePos].pos
+        var newEdgeInfo = EdgeInfo(currentNode + "->" + edgeTargetPos, edge.from, edge.to, null, edge.waitEdge, false, null, List())
         if (edgeInfo != null) {
-          var newCond = edgeInfo.cond
-          if (newCond == null && edge.cond != null) {
-            newCond = edge.cond
-          } else if (newCond != null && edge.cond != null) {
-            newCond = code"${edgeInfo.cond} && ${edge.cond}"
-          }
-          newEdgeInfo = EdgeInfo(edgeInfo.label + ", " + edge.label, edgeInfo.from, edge.to, code"${edgeInfo.code}; ${edge.code}", edge.waitEdge, false, newCond, edgeInfo.storePosRef ::: edge.storePosRef)
+          newEdgeInfo = EdgeInfo(edgeInfo.from.asInstanceOf[CodeNodePos].pos + "->" + edgeTargetPos, edgeInfo.from, edge.to, null, edge.waitEdge, false, null, List())
         }
         if (edge.waitEdge) {
-          newGraph.append(newEdgeInfo)
-          waitGraphInner(edge.to.asInstanceOf[CodeNodePos].pos, null, List())
+          if (!edgeList.contains((newEdgeInfo.from.asInstanceOf[CodeNodePos].pos, newEdgeInfo.to.asInstanceOf[CodeNodePos].pos))) {
+            newGraph.append(newEdgeInfo)
+            edgeList = (newEdgeInfo.from.asInstanceOf[CodeNodePos].pos, newEdgeInfo.to.asInstanceOf[CodeNodePos].pos) :: edgeList
+          }
+          waitGraphInner(edgeTargetPos, null, List())
         } else {
-          waitGraphInner(edge.to.asInstanceOf[CodeNodePos].pos, newEdgeInfo, currentNode :: visited)
+          waitGraphInner(edgeTargetPos, newEdgeInfo, currentNode :: visited)
         }
       })
     }
 
     waitGraphInner(0, null, List())
+
+
 
     newGraph
   }
@@ -83,21 +85,35 @@ object MergeActors {
               stateMapping = stateMapping + ((endStateA, endStateB) -> endPos)
             }
 
-            var newCond = symbol1.cond
-            if (newCond == null && symbol2.cond != null) {
-              newCond = symbol2.cond
-            } else if (newCond != null && symbol2.cond != null) {
-              newCond = code"${symbol1.cond} && ${symbol2.cond}"
-            }
-
-            val newEdgeInfo = EdgeInfo(symbol1.label + "--" + symbol2.label, CodeNodePos(startPos), CodeNodePos(endPos), code"${symbol1.code}; ${symbol2.code}",true, false, newCond, symbol1.storePosRef ::: symbol2.storePosRef)
+            val newEdgeInfo = EdgeInfo(symbol1.label + "|" + symbol2.label, CodeNodePos(startPos), CodeNodePos(endPos), null, true, false, null, symbol1.storePosRef ::: symbol2.storePosRef)
             mergedGraph.append(newEdgeInfo)
           }
         }
       }
     }
 
+    val mergedGraphReachableList = ArrayBuffer[Int]()
+    val startMergedgraph = mergedGraph.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
+    def calculateReachable(currentNode: Int): Unit = {
+      val node = startMergedgraph(currentNode)
+      if (mergedGraphReachableList.contains(currentNode)) {
+        return
+      }
+      mergedGraphReachableList.append(currentNode)
+      node.foreach(edge => calculateReachable(edge.to.asInstanceOf[CodeNodePos].pos))
+    }
+    calculateReachable(0)
+
+    var mergedGraphReachable = ArrayBuffer[EdgeInfo]()
     //This removes unreached states
-    waitGraph(mergedGraph)
+    mergedGraph.foreach(edge => {
+      if(mergedGraphReachableList.contains(edge.from.asInstanceOf[CodeNodePos].pos)) {
+        if(mergedGraphReachableList.contains(edge.to.asInstanceOf[CodeNodePos].pos)) {
+          mergedGraphReachable.append(edge)
+        }
+      }
+    })
+
+    mergedGraphReachable
   }
 }

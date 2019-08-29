@@ -7,7 +7,7 @@ import ecosim.deep.algo.AlgoInfo.EdgeInfo
 import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
 import ecosim.deep.codegen.{ClassCreation, GraphDrawing, InitCreation, MergeActors}
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
-import simulation.example.{Farmer, Market}
+import ecosim.example.Market
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -149,11 +149,34 @@ object CodegenExample extends App {
     farmer
   }
 
+  def controlFlowTestLifted(): ActorType[ControlFlowTestObject] = {
+    val c: ClassWithObject[ControlFlowTestObject] = ControlFlowTestObject.reflect(IR)
+
+    val cFself = Variable[ControlFlowTestObject]
+
+    val cF = ActorType[ControlFlowTestObject]("ControlFlowTestObject",
+      State[Int](IR.methodSymbol[ControlFlowTestObject]("x"), codeTypeOf[Int], code"0") ::
+      State[Int](IR.methodSymbol[ControlFlowTestObject]("y"), codeTypeOf[Int], code"0") ::
+        Nil,
+      Nil,
+      Forever(
+        LetBinding(None,
+          IfThenElse[Unit](code"$cFself.x < 0", Wait(code"1"), IfThenElse[Unit](code"$cFself.y < 0", Wait(code"1"), NoOp())),
+          Wait(code"1")
+        )
+      )
+      ,
+      cFself
+    )
+
+    cF
+  }
 
   val marketActorType = marketLifted()
+  val controlFlowTest = controlFlowTestLifted()
   val farmerActorType = farmerLifted(marketActorType.methods.find(_.sym.asMethodSymbol.name.toString == "sell2").get)
 
-  val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType :: Nil
+  val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType :: controlFlowTest :: Nil
 
   var graphs: Map[String, ArrayBuffer[EdgeInfo]] = Map()
 
@@ -166,13 +189,22 @@ object CodegenExample extends App {
   })
 
   val wGM = MergeActors.waitGraph(graphs("Market"))
-  GraphDrawing.drawGraph(wGM,"market_waitGraph")
+  GraphDrawing.drawGraph(wGM,"Market_waitGraph")
 
   val wGF = MergeActors.waitGraph(graphs("Farmer"))
-  GraphDrawing.drawGraph(wGF,"farmer_waitGraph")
+  GraphDrawing.drawGraph(wGF,"Farmer_waitGraph")
+
+  val wGCF = MergeActors.waitGraph(graphs("ControlFlowTestObject"))
+  GraphDrawing.drawGraph(wGCF,"ControlFlowTestObject_waitGraph")
 
   val mGMF = MergeActors.generateMergedStateMachine(wGM, wGF)
-  GraphDrawing.drawGraph(mGMF,"farmer_market_mergedGraph")
+  GraphDrawing.drawGraph(mGMF,"Farmer_Market_mergedGraph")
+
+  val mGFF = MergeActors.generateMergedStateMachine(wGF, wGF)
+  GraphDrawing.drawGraph(mGFF,"Farmer_Farmer_mergedGraph")
+
+  val mGCFCF = MergeActors.generateMergedStateMachine(wGCF, wGCF)
+  GraphDrawing.drawGraph(mGCFCF,"ControlFlowTestObject_ControlFlowTestObject_mergedGraph")
 
   val ic = new InitCreation(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)""", actorTypes)
   ic.run()
