@@ -178,6 +178,8 @@ object AlgoInfo {
     }
   }
 
+  case class MergeInfo(from: CodeNodePos, to: CodeNodePos, graph1: (CodeNodePos, CodeNodePos), graph2: (CodeNodePos, CodeNodePos))
+
   /**
     * Stores the edges to build up a state transition graph
     */

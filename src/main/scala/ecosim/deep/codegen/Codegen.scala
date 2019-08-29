@@ -169,6 +169,8 @@ abstract class Codegen(actorType: ActorType[_]) {
     */
   def createLists(): List[OpenCode[Unit]] = {
     AlgoInfo.stateGraph.clear()
+    AlgoInfo.variables = List()
+    AlgoInfo.varSavers = List()
     AlgoInfo.posCounter = 0
 
     // Generate code for main
@@ -323,6 +325,11 @@ abstract class Codegen(actorType: ActorType[_]) {
         //edge is added (else part)
         if (edge.cond != null && start.length > (edgeIndex._2+1)) {
           code(currentCodePos) = code"if(${edge.cond}) {${edge.code}; $posChanger} else {${AlgoInfo.positionVar} := ${Const(code.length)}}"
+        }
+
+        //Add wait at end, if there is a wait on that edge
+        if (edge.waitEdge) {
+          code(currentCodePos) = code"${code(currentCodePos)}; ${AlgoInfo.timeVar} := (${AlgoInfo.timeVar}!) + 1"
         }
       })
     }

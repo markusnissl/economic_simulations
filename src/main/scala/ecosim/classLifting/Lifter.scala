@@ -66,7 +66,7 @@ class Lifter {
       State(field.symbol, field.A, field.init)
     }}
     var endMethods: List[LiftedMethod[_]] = List()
-    var mainAlgo: Algo[_] = Forever(Wait(code"1"))
+    var mainAlgo: Algo[_] = Forever(Wait())
     //lifting methods - with main method as special case
     clasz.methods.foreach(method => {
       val cde = method.body
@@ -127,8 +127,8 @@ class Lifter {
       case code"if($cond: Boolean) $ifBody:T else $elseBody: T" =>
         val f = IfThenElse(cond, liftCode(ifBody, actorSelfVariable, clasz), liftCode(elseBody, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
-      case code"SpecialInstructions.waitTurns($x)" =>
-        val f = Wait(x)
+      case code"SpecialInstructions.waitTurns()" =>
+        val f = Wait()
         f.asInstanceOf[Algo[T]]
       case code"SpecialInstructions.handleMessages()" =>
         //generates an IfThenElse for each of this class' methods, which checks if the called method id is the same

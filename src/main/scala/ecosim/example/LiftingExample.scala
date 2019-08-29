@@ -27,7 +27,7 @@ class Actor2 extends Actor {
   def main() = {
     while (true){
       sell(1,22)("i sell stuff")
-      SpecialInstructions.waitTurns(1)
+      SpecialInstructions.waitTurns()
       SpecialInstructions.handleMessages()
     }
   }
@@ -44,7 +44,7 @@ class Actor1() extends Actor {
     while(true) {
       actor2.sell(1,22)("i buy stuff")
       actor2.sell(1,22)("i buy sssss")
-      SpecialInstructions.waitTurns(1)
+      SpecialInstructions.waitTurns()
     }
   }
   def met3(): String = {actor2.met2("afk"); "afk"}

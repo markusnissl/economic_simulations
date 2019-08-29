@@ -4,14 +4,12 @@ import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 
 /**
-  * Increases timer by cde time
-  * @param cde amount of time to wait
+  * Increases timer by 1
   */
-case class Wait(cde: OpenCode[Int]) extends Algo[Unit] {
+case class Wait() extends Algo[Unit] {
 
   override def codegen: Unit = {
-    val met: OpenCode[Unit] = code"${AlgoInfo.timeVar} := (${AlgoInfo.timeVar}!) + $cde; ()"
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("wait", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), met, waitEdge = true))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("wait", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), code"()", waitEdge = true))
     AlgoInfo.nextPos
   }
 }

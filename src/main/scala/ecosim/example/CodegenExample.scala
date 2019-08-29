@@ -78,7 +78,7 @@ object CodegenExample extends App {
                 CallMethod[Unit](marketSell.methodId, List(List(code"10"))),
                 LetBinding(None,
                   CallMethod[Unit](recursiveFunction.methodId, List(List(code"List(10,20,30)"))),
-                  Wait(code"1")
+                  Wait()
                 )
               )
             )
@@ -140,7 +140,7 @@ object CodegenExample extends App {
             ),
             ScalaCode(code"""println("TEST_VAR",$testResult)""")
           ),
-          Wait(code"1")
+          Wait()
         )
       )
       ,
@@ -161,8 +161,8 @@ object CodegenExample extends App {
       Nil,
       Forever(
         LetBinding(None,
-          IfThenElse[Unit](code"$cFself.x < 0", Wait(code"1"), IfThenElse[Unit](code"$cFself.y < 0", Wait(code"1"), NoOp())),
-          Wait(code"1")
+          IfThenElse[Unit](code"$cFself.x < 0", Wait(), IfThenElse[Unit](code"$cFself.y < 0", Wait(), NoOp())),
+          Wait()
         )
       )
       ,
@@ -198,13 +198,16 @@ object CodegenExample extends App {
   GraphDrawing.drawGraph(wGCF,"ControlFlowTestObject_waitGraph")
 
   val mGMF = MergeActors.generateMergedStateMachine(wGM, wGF)
-  GraphDrawing.drawGraph(mGMF,"Farmer_Market_mergedGraph")
+  GraphDrawing.drawMergeGraph(mGMF,"Farmer_Market_mergedGraph")
 
   val mGFF = MergeActors.generateMergedStateMachine(wGF, wGF)
-  GraphDrawing.drawGraph(mGFF,"Farmer_Farmer_mergedGraph")
+  GraphDrawing.drawMergeGraph(mGFF,"Farmer_Farmer_mergedGraph")
 
   val mGCFCF = MergeActors.generateMergedStateMachine(wGCF, wGCF)
-  GraphDrawing.drawGraph(mGCFCF,"ControlFlowTestObject_ControlFlowTestObject_mergedGraph")
+  GraphDrawing.drawMergeGraph(mGCFCF,"ControlFlowTestObject_ControlFlowTestObject_mergedGraph")
+
+  val nGCFCF = MergeActors.combineActors(mGCFCF, graphs("ControlFlowTestObject"), graphs("ControlFlowTestObject"))
+  GraphDrawing.drawGraph(nGCFCF,"ControlFlowTestObject_combinedGraph")
 
   val ic = new InitCreation(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)""", actorTypes)
   ic.run()

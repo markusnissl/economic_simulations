@@ -1,7 +1,7 @@
 package ecosim.deep.codegen
 
 import ecosim.deep.IR.Predef._
-import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo}
+import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo, MergeInfo}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -57,11 +57,11 @@ object MergeActors {
     newGraph
   }
 
-  def generateMergedStateMachine(graph1:ArrayBuffer[EdgeInfo], graph2: ArrayBuffer[EdgeInfo]): ArrayBuffer[EdgeInfo] = {
+  def generateMergedStateMachine(graph1:ArrayBuffer[EdgeInfo], graph2: ArrayBuffer[EdgeInfo]): ArrayBuffer[MergeInfo] = {
     val startGraph1 = graph1.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
     val startGraph2 = graph2.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
 
-    val mergedGraph:ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+    val mergedGraph:ArrayBuffer[MergeInfo] = ArrayBuffer[MergeInfo]()
 
     var newStateCounter:Int = 0
     var stateMapping: Map[(Int, Int), Int] = Map[(Int, Int), Int]()
@@ -85,7 +85,7 @@ object MergeActors {
               stateMapping = stateMapping + ((endStateA, endStateB) -> endPos)
             }
 
-            val newEdgeInfo = EdgeInfo(symbol1.label + "|" + symbol2.label, CodeNodePos(startPos), CodeNodePos(endPos), null, true, false, null, symbol1.storePosRef ::: symbol2.storePosRef)
+            val newEdgeInfo = MergeInfo(CodeNodePos(startPos), CodeNodePos(endPos), (symbol1.from.asInstanceOf[CodeNodePos],symbol1.to.asInstanceOf[CodeNodePos]), (symbol2.from.asInstanceOf[CodeNodePos],symbol2.to.asInstanceOf[CodeNodePos]))
             mergedGraph.append(newEdgeInfo)
           }
         }
@@ -104,7 +104,7 @@ object MergeActors {
     }
     calculateReachable(0)
 
-    var mergedGraphReachable = ArrayBuffer[EdgeInfo]()
+    var mergedGraphReachable = ArrayBuffer[MergeInfo]()
     //This removes unreached states
     mergedGraph.foreach(edge => {
       if(mergedGraphReachableList.contains(edge.from.asInstanceOf[CodeNodePos].pos)) {
@@ -115,5 +115,142 @@ object MergeActors {
     })
 
     mergedGraphReachable
+  }
+
+  def combineActors(mergedGraph:ArrayBuffer[MergeInfo], graph1:ArrayBuffer[EdgeInfo], graph2:ArrayBuffer[EdgeInfo]): ArrayBuffer[EdgeInfo] = {
+    val graph1Start = graph1.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
+    val graph2Start = graph2.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
+    val graph1Reachable: collection.mutable.Map[Int, List[Int]] = collection.mutable.Map[Int, List[Int]]()
+    val graph2Reachable: collection.mutable.Map[Int, List[Int]] = collection.mutable.Map[Int, List[Int]]()
+
+    def calculateReachableStates(graphStart: Map[Int, ArrayBuffer[EdgeInfo]], currentNode: Int, visited: List[Int]): List[Int] = {
+      //Node already visited
+      if (visited.contains(currentNode)) {
+        return Nil
+      }
+
+      val edges = graphStart(currentNode)
+      var reachable:List[Int] = Nil
+
+      edges.foreach(edge => {
+        if (edge.waitEdge) {
+          reachable = edge.to.asInstanceOf[CodeNodePos].pos :: reachable
+        } else {
+          reachable = calculateReachableStates(graphStart, edge.to.asInstanceOf[CodeNodePos].pos, currentNode :: visited)
+        }
+      })
+      reachable
+    }
+
+    graph1Start.keys.foreach(x => graph1Reachable(x) = calculateReachableStates(graph1Start, x, Nil))
+    graph2Start.keys.foreach(x => graph2Reachable(x) = calculateReachableStates(graph2Start, x, Nil))
+
+    val mergedGraphStart = mergedGraph.groupBy(_.from.pos)
+
+    var handledGraphStarts = List[Int]()
+
+    var reachedStatesGlobal = Map[Int, Map[Int, Int]]()
+    var startGraphGlobalMap = Map[Int, Int]()
+    var posCounter = 0
+    val globalGraph:ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+
+    def generateGraph(fromPos: Int): Unit = {
+      val start = mergedGraphStart(fromPos)
+      // A position has a steady start state per graph, it just depends on the control flow which next state is reached
+      val start1Pos = start(0).graph1._1.pos
+      val start2Pos = start(0).graph2._1.pos
+
+      val graph:ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+
+      val reachableStates = start.map(x => (x.graph1._2.pos, x.graph2._2.pos))
+
+      startGraphGlobalMap = startGraphGlobalMap + (fromPos -> posCounter)
+      /**
+        * Algorithm idea:
+        * For graph 1 follow edges until reaching a reachable state
+        * Then for graph2 follow edges until reaching a reachable state
+        */
+      var reachedStateTmp = 0
+      var reachedStates = Map[Int, Int]()
+      //var posMapping = Map[Int, Int]()
+
+      def generateEdges(graphStart: Map[Int, ArrayBuffer[EdgeInfo]], graphPos: Int, graphStart2: Map[Int, ArrayBuffer[EdgeInfo]], graphPos2: Int, posMappingI: Map[Int, Int]): Unit = {
+        val start1Edges = graphStart(graphPos)
+
+        var posMapping = posMappingI
+        val nodePos = posCounter
+
+        start1Edges.foreach(edge => {
+          val edgeTarget:Int = edge.to.asInstanceOf[CodeNodePos].pos
+
+          if(graphStart2 != null && !reachableStates.exists(x => graph1Reachable(edgeTarget).contains(x._1))) {
+            println("DBEUG: State not possible")
+            return
+          }
+          if(graphStart2 == null && !reachableStates.filter(_._1 == reachedStateTmp).exists(x => graph2Reachable(edgeTarget).contains(x._2))) {
+            println("DEBUG: State not possible")
+            return
+          }
+          /*if (graph1Reachable(edgeTarget)) {
+            return
+          }*/
+
+          val nextPos = posMapping.getOrElse(edgeTarget, posCounter + 1)
+          var newPos = false
+          if (nextPos > posCounter) {
+            posCounter = posCounter+1
+            posMapping = posMapping + (edgeTarget -> posCounter)
+            newPos = true
+          }
+
+          //Since we combine two graphs, the first one is not allowed to wait
+          var waitEdge = edge.waitEdge
+          if (graphStart2 != null) {
+            waitEdge = false
+          }
+
+          //TODO: rewrite storeposref
+          graph.append(EdgeInfo(edge.label, CodeNodePos(nodePos), CodeNodePos(nextPos), edge.code, waitEdge, edge.isMethod, edge.cond, edge.storePosRef))
+
+          if (!edge.waitEdge) {
+            if(newPos) {
+              generateEdges(graphStart, edgeTarget, graphStart2, graphPos2, posMapping)
+            }
+          } else {
+            if (graphStart2 != null) {
+              reachedStateTmp = edgeTarget
+              generateEdges(graphStart2, graphPos2, null, 0, Map())
+            } else {
+              reachedStates = reachedStates + (posCounter -> start.find(z => reachedStateTmp == z.graph1._2.pos && edgeTarget == z.graph2._2.pos).get.to.pos)
+            }
+          }
+        })
+      }
+
+      generateEdges(graph1Start, start1Pos, graph2Start, start2Pos, Map())
+      reachedStatesGlobal = reachedStatesGlobal + (fromPos -> reachedStates)
+
+      handledGraphStarts = fromPos :: handledGraphStarts
+
+      globalGraph.appendAll(graph)
+
+      start.foreach(edge => {
+        if(!handledGraphStarts.contains(edge.to.pos)) {
+          generateGraph(edge.to.pos)
+        }
+
+      })
+
+    }
+
+    generateGraph(0)
+
+    reachedStatesGlobal.foreach(x => {
+      x._2.foreach(edgeData => {
+        globalGraph.append(EdgeInfo("", CodeNodePos(edgeData._1), CodeNodePos(startGraphGlobalMap(edgeData._2)), code"()", false, false, null, Nil))
+      })
+    })
+
+    globalGraph
   }
 }
