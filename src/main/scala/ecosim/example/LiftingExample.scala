@@ -30,7 +30,7 @@ class Actor2 extends Actor {
   }
   def main() = {
     while (true){
-      sell(1,22)("i sell stuff")
+//      sell(1,22)("i sell stuff")
       SpecialInstructions.waitTurns(1)
       SpecialInstructions.handleMessages()
     }

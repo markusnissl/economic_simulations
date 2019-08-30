@@ -62,7 +62,6 @@ class Lifter {
     //lifting states - class attributes
     var endStates: List[State[_]] = List()
     endStates = clasz.fields.map{case field => {
-      //FIXME doesnt give a good type for field if it isnt initialized (it will give type null)
       import field.A
       State(field.symbol, field.init)
     }}
@@ -72,6 +71,7 @@ class Lifter {
     clasz.methods.foreach(method => {
       val cde = method.body
       val mtdBody = liftCode(cde, actorSelfVariable, clasz)
+      //TODO check why the type param of lifted method is Any
       endMethods = new LiftedMethod[Any](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
         override val mtd: cls.Method[Any, cls.Scp] = method.asInstanceOf[this.cls.Method[Any,cls.Scp]]
       } :: endMethods

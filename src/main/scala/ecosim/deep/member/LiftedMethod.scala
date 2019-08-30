@@ -17,7 +17,6 @@ import ecosim.deep.algo.Algo
   */
 abstract class LiftedMethod[R](val cls: IR.TopLevel.Clasz[_], var body: Algo[R], val blocking: Boolean, val methodId:Int)(implicit val R:CodeType[R]) {
   def sym: IR.MtdSymbol = mtd.symbol
-  var body2: Algo[R] = _
   val mtd: cls.Method[R, cls.Scp]
   var actorType: ActorType[_ <: Actor] = null
   override def hashCode() = sym.hashCode()

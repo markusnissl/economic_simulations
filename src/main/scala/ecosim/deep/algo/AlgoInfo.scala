@@ -132,6 +132,8 @@ object AlgoInfo {
     */
   var isMethod = false
 
+  //TODO add another parameter which will contain all the needed info if it is a send node.
+  // so that it can be changed to a callmethod with sso
   /**
     * Models an edge between to nodes
     * @param label a random name, which is displayed when drawing the graph

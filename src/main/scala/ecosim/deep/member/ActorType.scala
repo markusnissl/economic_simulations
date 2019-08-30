@@ -3,6 +3,7 @@ package ecosim.deep.member
 import ecosim.deep.algo.Algo
 import ecosim.deep.IR.Predef._
 
+//TODO get the stateless state somehow(annotation or analyze the code)
 /**
   * Class representation of an actorType containing the data needed for code generation
   * @param name of the actorType, must be unique
