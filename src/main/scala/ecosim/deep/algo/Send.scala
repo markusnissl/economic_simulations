@@ -39,11 +39,7 @@ case class Send[R](actorFrom: OpenCode[Actor],
                     ${AlgoInfo.returnValue} := null
                     ()
               """
-      val f2: OpenCode[Unit] =
-        code"""
-                        ${AlgoInfo.timeVar} := (${AlgoInfo.timeVar}!) + 1;
-                        ()
-                      """
+      val f2: OpenCode[Unit] = code"""()"""
       val f3: OpenCode[Unit] = code"""()"""
       val f4: OpenCode[Unit] =
         code"""

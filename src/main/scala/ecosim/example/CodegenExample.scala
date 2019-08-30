@@ -5,7 +5,7 @@ import ecosim.deep.IR.TopLevel._
 import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.EdgeInfo
 import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
-import ecosim.deep.codegen.{ClassCreation, GraphDrawing, InitCreation, MergeActors}
+import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline}
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
 import ecosim.example.Market
 
@@ -178,38 +178,11 @@ object CodegenExample extends App {
 
   val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType :: controlFlowTest :: Nil
 
-  var graphs: Map[String, ArrayBuffer[EdgeInfo]] = Map()
+  val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
+    new GraphMerge(),
+    new CreateCode(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)"""),
+  ))
 
-  actorTypes.foreach({
-    case x => {
-      val cc = new ClassCreation(x, actorTypes)
-      cc.run()
-      graphs = graphs + (x.name -> AlgoInfo.stateGraph.clone())
-    }
-  })
-
-  val wGM = MergeActors.waitGraph(graphs("Market"))
-  GraphDrawing.drawGraph(wGM,"Market_waitGraph")
-
-  val wGF = MergeActors.waitGraph(graphs("Farmer"))
-  GraphDrawing.drawGraph(wGF,"Farmer_waitGraph")
-
-  val wGCF = MergeActors.waitGraph(graphs("ControlFlowTestObject"))
-  GraphDrawing.drawGraph(wGCF,"ControlFlowTestObject_waitGraph")
-
-  val mGMF = MergeActors.generateMergedStateMachine(wGM, wGF)
-  GraphDrawing.drawMergeGraph(mGMF,"Farmer_Market_mergedGraph")
-
-  val mGFF = MergeActors.generateMergedStateMachine(wGF, wGF)
-  GraphDrawing.drawMergeGraph(mGFF,"Farmer_Farmer_mergedGraph")
-
-  val mGCFCF = MergeActors.generateMergedStateMachine(wGCF, wGCF)
-  GraphDrawing.drawMergeGraph(mGCFCF,"ControlFlowTestObject_ControlFlowTestObject_mergedGraph")
-
-  val nGCFCF = MergeActors.combineActors(mGCFCF, graphs("ControlFlowTestObject"), graphs("ControlFlowTestObject"))
-  GraphDrawing.drawGraph(nGCFCF,"ControlFlowTestObject_combinedGraph")
-
-  val ic = new InitCreation(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)""", actorTypes)
-  ic.run()
+  pipeline.run()
 
 }

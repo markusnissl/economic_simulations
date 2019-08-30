@@ -1,20 +1,25 @@
 package ecosim.deep.codegen
 
-import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo, MergeInfo}
+import ecosim.deep.member.ActorType
+import ecosim.deep.IR.Predef._
 
 import scala.collection.mutable.ArrayBuffer
 
-object MergeActors {
+class ActorMerge() extends StateMachineElement() {
+
+  override def run(compiledActorGraphs: List[CompiledActorGraph]): List[CompiledActorGraph] = {
+    compiledActorGraphs
+  }
 
   /**
     * This functions generates an abstract graph with only wait edges
     * This is required to generate a merged state machine, where only the wait edges generate a new state
     */
   def waitGraph(graph: ArrayBuffer[EdgeInfo]): ArrayBuffer[EdgeInfo] = {
-    val graphStart = graph.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
-    val newGraph:ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
-    var startNodes:List[Int] = List()
+    val graphStart = graph.groupBy(_.from.getNativeId)
+    val newGraph: ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+    var startNodes: List[Int] = List()
     var edgeList = List[(Int, Int)]()
 
     def waitGraphInner(currentNode: Int, edgeInfo: EdgeInfo, visited: List[Int]): Unit = {
@@ -33,15 +38,15 @@ object MergeActors {
       val startNode = graphStart(currentNode)
       startNode.foreach(edge => {
         //Remove all data about the node, make it as abstract as possible
-        val edgeTargetPos = edge.to.asInstanceOf[CodeNodePos].pos
+        val edgeTargetPos = edge.to.getNativeId
         var newEdgeInfo = EdgeInfo(currentNode + "->" + edgeTargetPos, edge.from, edge.to, null, edge.waitEdge, false, null, List())
         if (edgeInfo != null) {
-          newEdgeInfo = EdgeInfo(edgeInfo.from.asInstanceOf[CodeNodePos].pos + "->" + edgeTargetPos, edgeInfo.from, edge.to, null, edge.waitEdge, false, null, List())
+          newEdgeInfo = EdgeInfo(edgeInfo.from.getNativeId + "->" + edgeTargetPos, edgeInfo.from, edge.to, null, edge.waitEdge, false, null, List())
         }
         if (edge.waitEdge) {
-          if (!edgeList.contains((newEdgeInfo.from.asInstanceOf[CodeNodePos].pos, newEdgeInfo.to.asInstanceOf[CodeNodePos].pos))) {
+          if (!edgeList.contains((newEdgeInfo.from.getNativeId, newEdgeInfo.to.getNativeId))) {
             newGraph.append(newEdgeInfo)
-            edgeList = (newEdgeInfo.from.asInstanceOf[CodeNodePos].pos, newEdgeInfo.to.asInstanceOf[CodeNodePos].pos) :: edgeList
+            edgeList = (newEdgeInfo.from.getNativeId, newEdgeInfo.to.getNativeId) :: edgeList
           }
           waitGraphInner(edgeTargetPos, null, List())
         } else {
@@ -53,17 +58,16 @@ object MergeActors {
     waitGraphInner(0, null, List())
 
 
-
     newGraph
   }
 
-  def generateMergedStateMachine(graph1:ArrayBuffer[EdgeInfo], graph2: ArrayBuffer[EdgeInfo]): ArrayBuffer[MergeInfo] = {
-    val startGraph1 = graph1.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
-    val startGraph2 = graph2.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
+  def generateMergedStateMachine(graph1: ArrayBuffer[EdgeInfo], graph2: ArrayBuffer[EdgeInfo]): ArrayBuffer[MergeInfo] = {
+    val startGraph1 = graph1.groupBy(_.from.getNativeId)
+    val startGraph2 = graph2.groupBy(_.from.getNativeId)
 
-    val mergedGraph:ArrayBuffer[MergeInfo] = ArrayBuffer[MergeInfo]()
+    val mergedGraph: ArrayBuffer[MergeInfo] = ArrayBuffer[MergeInfo]()
 
-    var newStateCounter:Int = 0
+    var newStateCounter: Int = 0
     var stateMapping: Map[(Int, Int), Int] = Map[(Int, Int), Int]()
 
     for (stateA <- startGraph1.keys.toList.sorted) {
@@ -73,19 +77,19 @@ object MergeActors {
 
             val startPos = stateMapping.getOrElse((stateA, stateB), newStateCounter)
             if (startPos == newStateCounter) {
-              newStateCounter = newStateCounter+1
+              newStateCounter = newStateCounter + 1
               stateMapping = stateMapping + ((stateA, stateB) -> startPos)
             }
-            val endStateA = symbol1.to.asInstanceOf[CodeNodePos].pos
-            val endStateB = symbol2.to.asInstanceOf[CodeNodePos].pos
+            val endStateA = symbol1.to.getNativeId
+            val endStateB = symbol2.to.getNativeId
 
             val endPos = stateMapping.getOrElse((endStateA, endStateB), newStateCounter)
             if (endPos == newStateCounter) {
-              newStateCounter = newStateCounter+1
+              newStateCounter = newStateCounter + 1
               stateMapping = stateMapping + ((endStateA, endStateB) -> endPos)
             }
 
-            val newEdgeInfo = MergeInfo(CodeNodePos(startPos), CodeNodePos(endPos), (symbol1.from.asInstanceOf[CodeNodePos],symbol1.to.asInstanceOf[CodeNodePos]), (symbol2.from.asInstanceOf[CodeNodePos],symbol2.to.asInstanceOf[CodeNodePos]))
+            val newEdgeInfo = MergeInfo(CodeNodePos(startPos), CodeNodePos(endPos), (symbol1.from.asInstanceOf[CodeNodePos], symbol1.to.asInstanceOf[CodeNodePos]), (symbol2.from.asInstanceOf[CodeNodePos], symbol2.to.asInstanceOf[CodeNodePos]))
             mergedGraph.append(newEdgeInfo)
           }
         }
@@ -93,22 +97,24 @@ object MergeActors {
     }
 
     val mergedGraphReachableList = ArrayBuffer[Int]()
-    val startMergedgraph = mergedGraph.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
+    val startMergedgraph = mergedGraph.groupBy(_.from.getNativeId)
+
     def calculateReachable(currentNode: Int): Unit = {
       val node = startMergedgraph(currentNode)
       if (mergedGraphReachableList.contains(currentNode)) {
         return
       }
       mergedGraphReachableList.append(currentNode)
-      node.foreach(edge => calculateReachable(edge.to.asInstanceOf[CodeNodePos].pos))
+      node.foreach(edge => calculateReachable(edge.to.getNativeId))
     }
+
     calculateReachable(0)
 
     var mergedGraphReachable = ArrayBuffer[MergeInfo]()
     //This removes unreached states
     mergedGraph.foreach(edge => {
-      if(mergedGraphReachableList.contains(edge.from.asInstanceOf[CodeNodePos].pos)) {
-        if(mergedGraphReachableList.contains(edge.to.asInstanceOf[CodeNodePos].pos)) {
+      if (mergedGraphReachableList.contains(edge.from.getNativeId)) {
+        if (mergedGraphReachableList.contains(edge.to.getNativeId)) {
           mergedGraphReachable.append(edge)
         }
       }
@@ -117,9 +123,9 @@ object MergeActors {
     mergedGraphReachable
   }
 
-  def combineActors(mergedGraph:ArrayBuffer[MergeInfo], graph1:ArrayBuffer[EdgeInfo], graph2:ArrayBuffer[EdgeInfo]): ArrayBuffer[EdgeInfo] = {
-    val graph1Start = graph1.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
-    val graph2Start = graph2.groupBy(_.from.asInstanceOf[CodeNodePos].pos)
+  def combineActors(mergedGraph: ArrayBuffer[MergeInfo], graph1: ArrayBuffer[EdgeInfo], graph2: ArrayBuffer[EdgeInfo]): ArrayBuffer[EdgeInfo] = {
+    val graph1Start = graph1.groupBy(_.from.getNativeId)
+    val graph2Start = graph2.groupBy(_.from.getNativeId)
     val graph1Reachable: collection.mutable.Map[Int, List[Int]] = collection.mutable.Map[Int, List[Int]]()
     val graph2Reachable: collection.mutable.Map[Int, List[Int]] = collection.mutable.Map[Int, List[Int]]()
 
@@ -129,20 +135,28 @@ object MergeActors {
         return Nil
       }
 
-      val edges = graphStart(currentNode)
-      var reachable:List[Int] = Nil
+      val edgesX = graphStart.get(currentNode)
+      //No further edges to handle, end node
+      if (edgesX.isEmpty) {
+        return Nil
+      }
+
+
+      val edges = edgesX.get
+      var reachable: List[Int] = Nil
 
       edges.foreach(edge => {
         if (edge.waitEdge) {
-          reachable = edge.to.asInstanceOf[CodeNodePos].pos :: reachable
+          reachable = edge.to.getNativeId :: reachable
         } else {
-          reachable = calculateReachableStates(graphStart, edge.to.asInstanceOf[CodeNodePos].pos, currentNode :: visited)
+          reachable = calculateReachableStates(graphStart, edge.to.getNativeId, currentNode :: visited) ::: reachable
         }
       })
-      reachable
+      reachable.distinct
     }
 
     graph1Start.keys.foreach(x => graph1Reachable(x) = calculateReachableStates(graph1Start, x, Nil))
+    println(graph1Reachable)
     graph2Start.keys.foreach(x => graph2Reachable(x) = calculateReachableStates(graph2Start, x, Nil))
 
     val mergedGraphStart = mergedGraph.groupBy(_.from.pos)
@@ -152,7 +166,10 @@ object MergeActors {
     var reachedStatesGlobal = Map[Int, Map[Int, Int]]()
     var startGraphGlobalMap = Map[Int, Int]()
     var posCounter = 0
-    val globalGraph:ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+    val globalGraph: ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+
+    //New old
+    var storePosMapping = Map[EdgeInfo, EdgeInfo]()
 
     def generateGraph(fromPos: Int): Unit = {
       val start = mergedGraphStart(fromPos)
@@ -160,7 +177,7 @@ object MergeActors {
       val start1Pos = start(0).graph1._1.pos
       val start2Pos = start(0).graph2._1.pos
 
-      val graph:ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+      val graph: ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
 
       val reachableStates = start.map(x => (x.graph1._2.pos, x.graph2._2.pos))
 
@@ -181,14 +198,14 @@ object MergeActors {
         val nodePos = posCounter
 
         start1Edges.foreach(edge => {
-          val edgeTarget:Int = edge.to.asInstanceOf[CodeNodePos].pos
+          val edgeTarget: Int = edge.to.getNativeId
 
-          if(graphStart2 != null && !reachableStates.exists(x => graph1Reachable(edgeTarget).contains(x._1))) {
-            println("DBEUG: State not possible")
+          if (graphStart2 != null && !reachableStates.exists(x => graph1Reachable(edgeTarget).contains(x._1))) {
+            println("DBEUG 1: State not possible", graphPos, edgeTarget)
             return
           }
-          if(graphStart2 == null && !reachableStates.filter(_._1 == reachedStateTmp).exists(x => graph2Reachable(edgeTarget).contains(x._2))) {
-            println("DEBUG: State not possible")
+          if (graphStart2 == null && !reachableStates.filter(_._1 == reachedStateTmp).exists(x => graph2Reachable(edgeTarget).contains(x._2))) {
+            println("DEBUG 2: State not possible", graphPos, edgeTarget)
             return
           }
           /*if (graph1Reachable(edgeTarget)) {
@@ -198,7 +215,7 @@ object MergeActors {
           val nextPos = posMapping.getOrElse(edgeTarget, posCounter + 1)
           var newPos = false
           if (nextPos > posCounter) {
-            posCounter = posCounter+1
+            posCounter = posCounter + 1
             posMapping = posMapping + (edgeTarget -> posCounter)
             newPos = true
           }
@@ -210,10 +227,12 @@ object MergeActors {
           }
 
           //TODO: rewrite storeposref
-          graph.append(EdgeInfo(edge.label, CodeNodePos(nodePos), CodeNodePos(nextPos), edge.code, waitEdge, edge.isMethod, edge.cond, edge.storePosRef))
+          val newEdge = EdgeInfo(edge.label, CodeNodePos(nodePos), CodeNodePos(nextPos), edge.code, waitEdge, edge.isMethod, edge.cond, edge.storePosRef)
+          //edge.storePosRef.foreach(edge => storePosMapping = storePosMapping + (newEdge -> edge))
+          graph.append(newEdge)
 
           if (!edge.waitEdge) {
-            if(newPos) {
+            if (newPos) {
               generateEdges(graphStart, edgeTarget, graphStart2, graphPos2, posMapping)
             }
           } else {
@@ -235,12 +254,10 @@ object MergeActors {
       globalGraph.appendAll(graph)
 
       start.foreach(edge => {
-        if(!handledGraphStarts.contains(edge.to.pos)) {
+        if (!handledGraphStarts.contains(edge.to.pos)) {
           generateGraph(edge.to.pos)
         }
-
       })
-
     }
 
     generateGraph(0)
@@ -251,6 +268,10 @@ object MergeActors {
       })
     })
 
+    //Rewrite store pos references
+    println(storePosMapping)
+
     globalGraph
   }
+
 }

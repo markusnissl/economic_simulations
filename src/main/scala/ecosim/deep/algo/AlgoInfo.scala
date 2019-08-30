@@ -95,7 +95,7 @@ object AlgoInfo {
   /**
     * Go to next code fragment
     */
-  def nextPos {
+  def nextPos() {
     posCounter += 1
   }
 
@@ -104,6 +104,7 @@ object AlgoInfo {
     */
   abstract class CodeNode {
     def getId: String
+    def getNativeId: Int
   }
 
   /**
@@ -117,6 +118,7 @@ object AlgoInfo {
     }
 
     override def getId: String = (pos.toString)
+    override def getNativeId: Int = pos
   }
 
   /**
@@ -127,6 +129,7 @@ object AlgoInfo {
     */
   case class CodeNodeMtd(id: Int, end: Boolean = false) extends CodeNode {
     override def getId: String = "M" + id + (if (end) "E" else "")
+    override def getNativeId: Int = id
   }
 
   /**
@@ -147,11 +150,11 @@ object AlgoInfo {
   case class EdgeInfo(label: String,
                       var from: CodeNode,
                       var to: CodeNode,
-                      code: OpenCode[Unit],
+                      var code: OpenCode[Unit],
                       waitEdge: Boolean = false,
                       isMethod: Boolean = isMethod,
                       cond: OpenCode[Boolean] = null,
-                      var storePosRef: List[EdgeInfo] = Nil) {
+                      var storePosRef: List[List[EdgeInfo]] = Nil) {
 
     def convertToPosOnly (methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]): Unit = {
       from match {

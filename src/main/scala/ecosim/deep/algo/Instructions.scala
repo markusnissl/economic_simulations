@@ -5,16 +5,6 @@ import scala.annotation.compileTimeOnly
 object Instructions {
 
   /**
-    * Static resolution of position of methodId after generating the code and the positions are fixed
-    * @param methodId id of method you want to call
-    * @return position in code
-    */
-  @compileTimeOnly("This function can only be called at compile time")
-  def getMethodPosition(methodId: Int): Int = {
-    ???
-  }
-
-  /**
     * sets the register of the method with the given arguement
     * @param methodId id of method you call
     * @param argPos position of argument (Starting with 0, if multiple lists, just continue counting)

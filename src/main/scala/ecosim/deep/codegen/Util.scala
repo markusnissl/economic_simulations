@@ -1,0 +1,41 @@
+package ecosim.deep.codegen
+
+import ecosim.deep.algo.AlgoInfo.{EdgeInfo, VarWrapper}
+import ecosim.deep.member.ActorType
+import ecosim.deep.IR.Predef._
+import scala.collection.mutable.ArrayBuffer
+
+case class Pipeline(convertElement: ConvertElement, stateMachineElements: List[StateMachineElement]) {
+  def run(): Unit = {
+    var stateMachine = convertElement.run()
+    stateMachineElements.foreach(x => {
+      stateMachine = x.run(stateMachine)
+    })
+  }
+}
+abstract class PipelineElement() {}
+
+abstract class ConvertElement(actorTypes: List[ActorType[_]]) extends PipelineElement() {
+  def run(): List[CompiledActorGraph]
+}
+
+abstract class StateMachineElement() extends PipelineElement() {
+  def run(compiledActorGraphs: List[CompiledActorGraph]): List[CompiledActorGraph]
+}
+
+case class CompiledActorGraph(var name: String,
+                              var graph: ArrayBuffer[EdgeInfo],
+                              var variables: List[VarWrapper[_]],
+                              var variables2: List[VarValue[_]],
+                              var actorTypes: List[ActorType[_]],
+                             )
+
+/**
+  * This class is used to create the variable stack for each parameter variable of a method
+  *
+  * @param variable to be used in code
+  * @param init     code to init variable
+  * @param A        type of variable
+  * @tparam C variable type
+  */
+case class VarValue[C](variable: Variable[C], init: OpenCode[C])(implicit val A: CodeType[C])

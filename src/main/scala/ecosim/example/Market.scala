@@ -30,7 +30,7 @@ class Market extends Actor {
       sell(10)
       recursiveTest(List(10, 20, 30))
       handleMessages()
-      waitTurns(1)
+      waitTurns()
     }
   }
 

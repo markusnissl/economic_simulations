@@ -1,12 +1,13 @@
 package ecosim.example
 
-import ecosim.deep.codegen.{ClassCreation, InitCreation}
 import ecosim.example.Market
 import ecosim.classLifting.Lifter
 import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 import ecosim.deep.IR.TopLevel._
+import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline}
 import ecosim.deep.member.Actor
+import ecosim.example.CodegenExample.actorTypes
 
 object LifterCodegenExample extends App {
   val cls1: ClassWithObject[Market] = Market.reflect(IR)
@@ -19,13 +20,10 @@ object LifterCodegenExample extends App {
   val lifter = new Lifter()
   val simulationData = lifter(startClasses, mainClass)
 
-  simulationData._1.foreach({
-    case x => {
-      val cc = new ClassCreation(x, simulationData._1)
-      cc.run()
-    }
-  })
+  val pipeline = Pipeline(new CreateActorGraphs(simulationData._1), List(
+    new GraphMerge(),
+    new CreateCode(simulationData._2),
+  ))
 
-  val ic = new InitCreation(simulationData._2, simulationData._1)
-  ic.run()
+  pipeline.run()
 }
