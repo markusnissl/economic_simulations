@@ -12,6 +12,17 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
   */
 object AlgoInfo {
 
+  //This resets the variables which have to be unique per actorType
+  def resetData(): Unit = {
+    this.stateGraph.clear()
+    this.variables = List()
+    this.varSavers = List()
+    this.posCounter = 0
+    this.positionStack = Variable[ListBuffer[Int]]
+    this.returnValue = Variable[MutVar[Any]]
+    this.responseMessage = Variable[MutVar[ResponseMessage]]
+  }
+
   /**
     * Helper class to save mappings between a variable introduced to a mutable variable, which is used in
     * the program. This is necessary, since it is not possible to define var variable references in squid
@@ -42,17 +53,17 @@ object AlgoInfo {
     * This stack is used to save a position into it, so that it can be used to jump
     * to it in a later part. For example, to jump back after a method call
     */
-  val positionStack: Variable[ListBuffer[Int]] = Variable[ListBuffer[Int]]
+  var positionStack: Variable[ListBuffer[Int]] = Variable[ListBuffer[Int]]
 
   /**
     * This variables is used as a register to store the return value of a call.
     */
-  val returnValue: Variable[MutVar[Any]] = Variable[MutVar[Any]]
+  var returnValue: Variable[MutVar[Any]] = Variable[MutVar[Any]]
 
   /**
     * This variable is used to save data about the response message, if a blocking call is made
     */
-  val responseMessage: Variable[MutVar[ResponseMessage]] = Variable[MutVar[ResponseMessage]]
+  var responseMessage: Variable[MutVar[ResponseMessage]] = Variable[MutVar[ResponseMessage]]
 
   /**
     * List, saving all variables, which should be defined at the beginning
@@ -65,27 +76,12 @@ object AlgoInfo {
   var varSavers: List[VarWrapper[_]] = List[VarWrapper[_]]()
 
   /**
-    * Helper, for pushing the current position on the stack
-    */
-  val pushCurrent = code"$positionStack.prepend(($positionVar!))"
-  /**
-    * Helper, for pushing the next position on the stack
-    */
-  val pushNext = code"$positionStack.prepend(($positionVar!) + 1)"
-
-  /**
     * Helper, for jumping relativly to a different position
     *
     * @param offset relative jumping offset
     * @return Code containing the position modification
     */
   def jump(offset: Int) = code"$positionVar := ($positionVar!) + ${Const(offset)}"
-
-  /**
-    * Helper, for restoring the position in the stack
-    */
-  val restorePosition = code"""$positionVar := $positionStack.remove(0); ()"""
-
 
   /**
     * Current position/code fragment

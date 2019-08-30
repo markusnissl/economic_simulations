@@ -3,7 +3,8 @@ package ecosim.deep.codegen
 import ecosim.deep.algo.AlgoInfo.{EdgeInfo, VarWrapper}
 import ecosim.deep.member.ActorType
 import ecosim.deep.IR.Predef._
-import scala.collection.mutable.ArrayBuffer
+
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 case class Pipeline(convertElement: ConvertElement, stateMachineElements: List[StateMachineElement]) {
   def run(): Unit = {
@@ -28,6 +29,7 @@ case class CompiledActorGraph(var name: String,
                               var variables: List[VarWrapper[_]],
                               var variables2: List[VarValue[_]],
                               var actorTypes: List[ActorType[_]],
+                              var positionStack: List[Variable[ListBuffer[Int]]], //required to generate poping from stack statements at create code
                              )
 
 /**

@@ -76,10 +76,8 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
     * @return a list of code, containing all code fragments of main code and method codes + initialized variable tables
     */
   def createCompiledActorGraph(actorType: ActorType[_]): CompiledActorGraph = {
-    AlgoInfo.stateGraph.clear()
-    AlgoInfo.variables = List()
-    AlgoInfo.varSavers = List()
-    AlgoInfo.posCounter = 0
+    AlgoInfo.resetData()
+    this.variables = List()
 
     // Generate code for main
     val main = createCode(actorType.main.asInstanceOf[Algo[Any]], false)
@@ -133,7 +131,9 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
       })
     })
 
-    CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType))
+    variables = VarValue(AlgoInfo.returnValue,code"MutVar[Any](null)") :: VarValue(AlgoInfo.positionStack,code"ListBuffer[Int]()") :: VarValue(AlgoInfo.responseMessage,code"MutVar[ecosim.deep.member.ResponseMessage](null)") :: variables
+
+    CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType), List[Variable[ListBuffer[Int]]](AlgoInfo.positionStack))
   }
 
 
