@@ -100,7 +100,7 @@ object CodegenExample extends App {
 
 
     val tellP2: Variable[Int] = te.vparams.head.tail.head.asInstanceOf[Variable[Int]]
-    val tell = new LiftedMethod[Unit](f, ScalaCode(code"$farmerSelf.happiness = $farmerSelf.happiness - ${tellP2}; ()"), true, 1) {
+    val tell = new LiftedMethod[Unit](f, ScalaCode(code"$farmerSelf.happiness = $farmerSelf.happiness - ${tellP2}; ()"), true, 4) {
       override val mtd: cls.Method[Unit, cls.Scp] = te.asInstanceOf[this.cls.Method[Unit, cls.Scp]]
     }
 
@@ -118,7 +118,7 @@ object CodegenExample extends App {
           false
         )
       ),
-      false, 2) {
+      false, 5) {
       override val mtd: cls.Method[Unit, cls.Scp] = nP.asInstanceOf[this.cls.Method[Unit, cls.Scp]]
     }
 
