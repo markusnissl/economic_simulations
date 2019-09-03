@@ -11,7 +11,7 @@ import ecosim.deep.member.Actor
 @lift
 class ActorReceiver() extends Actor {
   def metBlocking(): Int = 1312
-  def metNonBlocking(i: Int): NBUnit = NBUnit()
+//  def metNonBlocking(i: Int): NBUnit = NBUnit()
   def main() = {
     while(true) {
       handleMessages()
@@ -20,6 +20,8 @@ class ActorReceiver() extends Actor {
   }
 }
 
+//todo tell markus about not working local methods
+
 @lift
 class ActorSender() extends Actor {
   var env: ActorReceiver = new ActorReceiver()
@@ -27,12 +29,8 @@ class ActorSender() extends Actor {
   def main(): Unit = {
     while(true){
       println("First command")
-//      println(env.metBlocking())
-      println("Im doing it")
-      env.metNonBlocking(999)
-//      local()
-//      local()
-      println("Stop right there mister")
+      env.metBlocking()
+      println("next command")
       waitTurns()
     }
   }
@@ -65,11 +63,9 @@ object SimpleSendExample extends App {
   val lifter = new Lifter()
   val (actorTypes, initCode) = lifter(List(cls1, cls2), cls3)
 
-  //doesnt work without sso
-  //works with it, but then graphmerge doesnt work
   val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
     new SSO(),
-//    new GraphMerge(),
+    new GraphMerge(),
     new CreateCode(initCode),
   ))
 
