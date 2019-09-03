@@ -30,6 +30,7 @@ case class CompiledActorGraph(var name: String,
                               var variables2: List[VarValue[_]],
                               var actorTypes: List[ActorType[_]],
                               var positionStack: List[Variable[ListBuffer[Int]]], //required to generate poping from stack statements at create code
+                              var freePosition: Int = 0
                              )
 
 /**

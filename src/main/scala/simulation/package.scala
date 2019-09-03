@@ -29,6 +29,13 @@ package object simulation {
       lastObjectId
     }
 
+    var lastMethodId = 0
+    def getNextMethodId: Int = {
+      val tmp = lastMethodId
+      lastMethodId = lastMethodId + 1
+      tmp
+    }
+
   }
 
 }

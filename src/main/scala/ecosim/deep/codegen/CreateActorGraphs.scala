@@ -9,8 +9,15 @@ import ecosim.deep.IR.Predef._
 
 import scala.annotation.tailrec
 
-class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(actorTypes) {
 
+//TODO ask markus if theres a problem with this
+object CreateActorGraphs {
+  val methodVariableTable: collection.mutable.Map[Int, ArrayBuffer[Variable[MutVar[Any]]]] = collection.mutable.Map[Int, ArrayBuffer[Variable[MutVar[Any]]]]()
+  val methodVariableTableStack: collection.mutable.Map[Int, ArrayBuffer[Variable[ListBuffer[Any]]]] = collection.mutable.Map[Int, ArrayBuffer[Variable[ListBuffer[Any]]]]()
+}
+
+class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(actorTypes) {
+  import CreateActorGraphs._
   override def run(): List[CompiledActorGraph] = {
     val graphs = actorTypes.map(createCompiledActorGraph)
     graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name + "_original"))
@@ -19,8 +26,7 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
 
   private val methodLookupTable: collection.mutable.Map[Int, Int] = collection.mutable.Map[Int, Int]()
   private val methodLookupTableEnd: collection.mutable.Map[Int, Int] = collection.mutable.Map[Int, Int]()
-  private val methodVariableTable: collection.mutable.Map[Int, ArrayBuffer[Variable[MutVar[Any]]]] = collection.mutable.Map[Int, ArrayBuffer[Variable[MutVar[Any]]]]()
-  private val methodVariableTableStack: collection.mutable.Map[Int, ArrayBuffer[Variable[ListBuffer[Any]]]] = collection.mutable.Map[Int, ArrayBuffer[Variable[ListBuffer[Any]]]]()
+
   private var variables: List[VarValue[_]] = List()
 
   /**
@@ -64,8 +70,9 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
     * @param isMethod if true, then a restore position is added at the end
     * @return a list of code steps
     */
-  private def createCode(algo: Algo[_], isMethod: Boolean): Unit = {
+  private def createCode(algo: Algo[_], isMethod: Boolean, methodId: Int = -1): Unit = {
     AlgoInfo.isMethod = isMethod
+    AlgoInfo.methodId = methodId
     algo.codegen
     AlgoInfo.nextPos()
   }
@@ -86,7 +93,7 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
     val methodData = actorType.methods.map({
       case method => {
         methodLookupTable(method.methodId) = AlgoInfo.posCounter
-        createCode(method.body.asInstanceOf[Algo[Any]], true)
+        createCode(method.body.asInstanceOf[Algo[Any]], true, method.methodId)
         methodLookupTableEnd(method.methodId) = AlgoInfo.posCounter - 1
 
 
@@ -133,7 +140,7 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
 
     variables = VarValue(AlgoInfo.returnValue,code"MutVar[Any](null)") :: VarValue(AlgoInfo.positionStack,code"ListBuffer[Int]()") :: VarValue(AlgoInfo.responseMessage,code"MutVar[ecosim.deep.member.ResponseMessage](null)") :: variables
 
-    CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType), List[Variable[ListBuffer[Int]]](AlgoInfo.positionStack))
+    CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType), List[Variable[ListBuffer[Int]]](AlgoInfo.positionStack), AlgoInfo.posCounter)
   }
 
 

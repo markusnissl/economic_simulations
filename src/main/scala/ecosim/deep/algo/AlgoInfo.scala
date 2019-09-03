@@ -33,8 +33,8 @@ object AlgoInfo {
     * @param A    code type of original variable
     * @tparam C type of original variable
     */
-  case class VarWrapper[C](from: Variable[C], to: Variable[MutVar[C]])(implicit val A: CodeType[C])
 
+  case class VarWrapper[C](from: Variable[C], to: Variable[MutVar[C]])(implicit val A: CodeType[C])
   /**
     * Variable containing the current execution time.
     * Need to be increased, if some waiting has to be done after
@@ -132,6 +132,7 @@ object AlgoInfo {
     * IF inside method, set to true, so that graph knows about that (just for displaying in a different color atm)
     */
   var isMethod = false
+  var methodId = -1
 
   /**
     * Models an edge between to nodes
@@ -150,7 +151,13 @@ object AlgoInfo {
                       waitEdge: Boolean = false,
                       isMethod: Boolean = isMethod,
                       cond: OpenCode[Boolean] = null,
-                      var storePosRef: List[List[EdgeInfo]] = Nil) {
+                      var storePosRef: List[List[EdgeInfo]] = Nil,
+                      var sendInfo: (Send[_], Boolean) = null,
+                      var methodId1: Int = methodId) {
+
+    def myCopy(): EdgeInfo = {
+      EdgeInfo(label, from, to, code, waitEdge, isMethod, cond, storePosRef, sendInfo, methodId1)
+    }
 
     def convertToPosOnly (methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]): Unit = {
       from match {

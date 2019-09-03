@@ -5,7 +5,7 @@ import ecosim.deep.IR.TopLevel._
 import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.EdgeInfo
 import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
-import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline}
+import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline, SSO}
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
 import ecosim.example.Market
 
@@ -179,6 +179,7 @@ object CodegenExample extends App {
   val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType :: controlFlowTest :: Nil
 
   val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
+    new SSO(),
     new GraphMerge(),
     new CreateCode(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)"""),
   ))

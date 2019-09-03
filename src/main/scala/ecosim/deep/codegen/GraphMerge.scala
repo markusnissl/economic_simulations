@@ -64,6 +64,7 @@ class GraphMerge() extends StateMachineElement() {
     //For posStoreRef
     var replacedNodesEnd: Map[Int, Int] = Map()
 
+    //TODO find error
     for (entryOriginal <- mergeList) {
       var entry = entryOriginal
       val replacedNodeStart = replacedNodes.get(entry.startNode)

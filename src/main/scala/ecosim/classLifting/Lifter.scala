@@ -22,7 +22,7 @@ class Lifter {
     */
   var methodsMap: Map[IR.MtdSymbol, MethodInfo[_]] = Map()
 
-
+  //TODO fix waitTurns and lift if the actortype is a stateless server (naming convention, ending with stateless)
   /** Lifts the classes and object initialization
     *
     * @param startClasses - classes that need to be lifted, in form of [[Clasz]]
@@ -41,6 +41,7 @@ class Lifter {
           if (method.A <:< codeTypeOf[NBUnit]) blocking = false
           methodsMap = methodsMap + (method.symbol -> new MethodInfo[method.A](method.symbol, method.tparams, method.vparams, blocking))
           counter += 1
+          simulation.Generator.getNextMethodId
       })
     //lifting types
     val endTypes = startClasses.map(c => {

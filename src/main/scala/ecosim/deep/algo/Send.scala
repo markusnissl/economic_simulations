@@ -47,14 +47,14 @@ case class Send[R](actorFrom: OpenCode[Actor],
                        ${AlgoInfo.responseMessage} := null;
                        ()"""
 
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1, sendInfo = (this, true)))
       AlgoInfo.nextPos
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f2",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f2, waitEdge = true))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f2",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f2, waitEdge = true, sendInfo = (this, false)))
       AlgoInfo.nextPos
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f3, cond=code"(${AlgoInfo.responseMessage}!) != null"))
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 no result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter-1), f3, cond=code"(${AlgoInfo.responseMessage}!) == null"))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f3, cond=code"(${AlgoInfo.responseMessage}!) != null", sendInfo = (this, false)))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 no result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter-1), f3, cond=code"(${AlgoInfo.responseMessage}!) == null", sendInfo = (this, false)))
       AlgoInfo.nextPos
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f4",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f4))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f4",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f4, sendInfo = (this, false)))
       AlgoInfo.nextPos
     } else {
       val f1: OpenCode[Unit] =
@@ -66,7 +66,7 @@ case class Send[R](actorFrom: OpenCode[Actor],
                     ${AlgoInfo.returnValue} := null
                     ()
               """
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send nb f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send nb f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1, sendInfo = (this, true)))
       AlgoInfo.nextPos
     }
   }
