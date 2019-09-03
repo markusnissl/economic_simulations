@@ -11,6 +11,8 @@ import scala.annotation.tailrec
 
 class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(actorTypes) {
 
+  case class MutVarType[A](variable: Variable[MutVar[A]], codeType: CodeType[A])
+
   override def run(): List[CompiledActorGraph] = {
     val graphs = actorTypes.map(createCompiledActorGraph)
     graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name + "_original"))
@@ -19,7 +21,7 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
 
   private val methodLookupTable: collection.mutable.Map[Int, Int] = collection.mutable.Map[Int, Int]()
   private val methodLookupTableEnd: collection.mutable.Map[Int, Int] = collection.mutable.Map[Int, Int]()
-  private val methodVariableTable: collection.mutable.Map[Int, ArrayBuffer[Variable[MutVar[Any]]]] = collection.mutable.Map[Int, ArrayBuffer[Variable[MutVar[Any]]]]()
+  private val methodVariableTable: collection.mutable.Map[Int, ArrayBuffer[MutVarType[_]]] = collection.mutable.Map[Int, ArrayBuffer[MutVarType[_]]]()
   private val methodVariableTableStack: collection.mutable.Map[Int, ArrayBuffer[Variable[ListBuffer[Any]]]] = collection.mutable.Map[Int, ArrayBuffer[Variable[ListBuffer[Any]]]]()
   private var variables: List[VarValue[_]] = List()
 
@@ -29,7 +31,7 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
     * @param data list of (methodId, list of parameter variables)
     */
   @tailrec
-  private def createVariableTable(data: List[(Int, List[Variable[MutVar[Any]]])]): Unit = data match {
+  private def createVariableTable(data: List[(Int, List[MutVarType[_]])]): Unit = data match {
     case (x :: xs) => {
       methodVariableTable(x._1) = ArrayBuffer(x._2: _*)
       createVariableTable(xs)
@@ -90,13 +92,20 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
         methodLookupTableEnd(method.methodId) = AlgoInfo.posCounter - 1
 
 
-        val varList = ListBuffer[Variable[MutVar[Any]]]()
+        val varList = ListBuffer[MutVarType[_]]()
+
         method.mtd.vparams.foreach(paramList => {
-          paramList.foreach(param => {
-            val methodArgsMut = Variable[MutVar[Any]];
-            varList.append(methodArgsMut)
-            AlgoInfo.variables = AlgoInfo.VarWrapper(param.asInstanceOf[Variable[Any]], methodArgsMut) :: AlgoInfo.variables
-          })
+          paramList.foreach({case param:Variable[v] => {
+            //To be honest, dont know why this is working now (Type)
+            def ttt[Z](variable: Variable[Z]): Unit = {
+              val cT = variable.Typ
+              val methodArgsMut:Variable[MutVar[variable.Typ]] = Variable[MutVar[variable.Typ]];
+              AlgoInfo.variables = AlgoInfo.VarWrapper[Z](variable, methodArgsMut) :: AlgoInfo.variables
+              varList.append(MutVarType(methodArgsMut,cT))
+            }
+            ttt(param)
+
+          }})
         })
         (varList, method.methodId)
       }
@@ -111,8 +120,14 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
     AlgoInfo.stateGraph.foreach(edge => {
       edge.code = edge.code.rewrite({
         case code"ecosim.deep.algo.Instructions.setMethodParam(${Const(a)}, ${Const(b)}, $c)" => {
-          val variable: Variable[MutVar[Any]] = methodVariableTable(a)(b)
-          code"$variable := $c"
+          val variable: MutVarType[_] = methodVariableTable(a)(b)
+
+          variable match {
+            case v:MutVarType[a] => {
+              code"${v.variable} := $c.asInstanceOf[${v.codeType}]"
+            }
+            case _ => throw new RuntimeException("Illegal state")
+          }
         }
         case code"ecosim.deep.algo.Instructions.saveMethodParam(${Const(a)}, ${Const(b)}, $c)" => {
           val stack: ArrayBuffer[Variable[ListBuffer[Any]]] = methodVariableTableStack(a)
@@ -123,9 +138,14 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
           val stack: ArrayBuffer[Variable[ListBuffer[Any]]] = methodVariableTableStack(a)
           val initCode: OpenCode[Unit] = code"()"
           stack.zipWithIndex.foldRight(initCode)((c, b) => {
-            val variable: Variable[MutVar[Any]] = methodVariableTable(a)(c._2)
+            val variable: MutVarType[_] = methodVariableTable(a)(c._2)
             val ab = c._1
-            code"$ab.remove(0); if(!$ab.isEmpty) {$variable := $ab(0)}; $b; ()"
+            variable match {
+              case v:MutVarType[a] => {
+                code"$ab.remove(0); if(!$ab.isEmpty) {${v.variable} := $ab(0).asInstanceOf[${v.codeType}]}; $b; ()"
+              }
+              case _ => throw new RuntimeException("Illegal state")
+            }
           })
         }
       })

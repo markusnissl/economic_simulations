@@ -68,16 +68,17 @@ class Lifter {
     var endMethods: List[LiftedMethod[_]] = List()
     var mainAlgo: Algo[_] = DoWhile(code"true", Wait())
     //lifting methods - with main method as special case
-    clasz.methods.foreach(method => {
-      val cde = method.body
-      val mtdBody = liftCode(cde, actorSelfVariable, clasz)
-      endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
-        override val mtd: cls.Method[Any, cls.Scp] = method.asInstanceOf[this.cls.Method[Any,cls.Scp]]
+    clasz.methods.foreach({case method:clasz.Method[a,b] => {
+      import method.A
+      val cde:OpenCode[method.A] = method.body.asOpenCode
+      val mtdBody = liftCode[method.A](cde, actorSelfVariable, clasz)
+      endMethods = (new LiftedMethod[method.A](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
+        override val mtd: cls.Method[method.A, cls.Scp] = method.asInstanceOf[this.cls.Method[method.A,cls.Scp]]
       }) :: endMethods
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
         mainAlgo = mtdBody
       }
-    })
+    }})
     ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
   }
 
