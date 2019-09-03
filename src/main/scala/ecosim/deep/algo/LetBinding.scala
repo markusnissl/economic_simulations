@@ -6,15 +6,16 @@ import squid.lib.MutVar
 
 /**
   * bound if None, then method chaining, else value is bound to bound and then rest is executed with bounded value
+  *
   * @param bound variable to bound value to
   * @param value first algorithm, which returns the bound
-  * @param rest second algorithm, which is executed with the bounded bound
-  * @param V codetype of v
+  * @param rest  second algorithm, which is executed with the bounded bound
+  * @param V     codetype of v
   * @tparam V type of the variable
   * @tparam A return value of Algo
   */
-case class LetBinding[V, A: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A])(implicit val V: CodeType[V]) extends Algo[A]
-{
+case class LetBinding[V, A: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A])(implicit val V: CodeType[V]) extends Algo[A] {
+
   override def codegen: Unit = {
     value.codegen
 
@@ -22,6 +23,7 @@ case class LetBinding[V, A: CodeType](bound: Option[Variable[V]], value: Algo[V]
       rest.codegen
       ()
     } else {
+
       var bindingMut = Variable[MutVar[V]]
       var contained = false
 
@@ -39,18 +41,16 @@ case class LetBinding[V, A: CodeType](bound: Option[Variable[V]], value: Algo[V]
       val bindingMutFinal = bindingMut
 
       val met2 = code"""$bindingMutFinal := ((${AlgoInfo.returnValue}!).asInstanceOf[V]); ()"""
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("LetBinding met2", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), met2))
-      AlgoInfo.nextPos
-
-      val boundValue = bound.get
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("LetBinding met2", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), met2))
+      AlgoInfo.nextPos()
 
       rest.codegen
-      //TODO val met3 = ().map(x => x.subs(boundValue).~>(code"($bindingMutFinal!)"))
 
       // If variable is defined here, remove it for the outer block again, it was defined only for the sub-block
       if (!contained) {
         AlgoInfo.varSavers = AlgoInfo.varSavers.filter(_.from != bound.get)
       }
+
 
     }
   }

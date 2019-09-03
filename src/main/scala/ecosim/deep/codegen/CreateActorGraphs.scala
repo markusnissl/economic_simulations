@@ -1,6 +1,6 @@
 package ecosim.deep.codegen
 
-import ecosim.deep.algo.{Algo, AlgoInfo}
+import ecosim.deep.algo.{Algo, AlgoInfo, NoOp, ScalaCode}
 import ecosim.deep.member.ActorType
 import squid.lib.MutVar
 
@@ -68,7 +68,13 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
     */
   private def createCode(algo: Algo[_], isMethod: Boolean): Unit = {
     AlgoInfo.isMethod = isMethod
-    algo.codegen
+
+    //Method body is empty
+    if (algo.isInstanceOf[NoOp[_]]) {
+      ScalaCode(code"()").codegen
+    } else {
+      algo.codegen
+    }
     AlgoInfo.nextPos()
   }
 
