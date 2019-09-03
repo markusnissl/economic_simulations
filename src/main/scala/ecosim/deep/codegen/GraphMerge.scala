@@ -91,10 +91,12 @@ class GraphMerge() extends StateMachineElement() {
       groupedGraphStart(entry.startNode).append(newNode)
 
       //Keep references of replaced nodes updated
-      replacedNodes = replacedNodes + (entry.middleNode -> entry.startNode)
-      replacedNodesEnd = replacedNodesEnd + (entry.middleNode -> entry.endNode)
-      replacedNodes.mapValues(x => if (x == entry.middleNode) entry.startNode else x)
-      replacedNodesEnd.mapValues(x => if (x == entry.middleNode) entry.endNode else x)
+      val rSN = replacedNodes.getOrElse(entry.startNode, entry.startNode)
+      val rSNE = replacedNodesEnd.getOrElse(entry.endNode, entry.endNode)
+      replacedNodes = replacedNodes + (entry.middleNode -> rSN)
+      replacedNodesEnd = replacedNodesEnd + (entry.middleNode -> rSNE)
+      replacedNodes.mapValues(x => if (x == entry.middleNode) rSN else x)
+      replacedNodesEnd.mapValues(x => if (x == entry.middleNode) rSNE else x)
     }
 
     val graph2 = groupedGraphStart.foldLeft(ArrayBuffer[EdgeInfo]())((a, b) => {

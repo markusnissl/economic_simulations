@@ -9,6 +9,17 @@ import scala.collection.mutable.ArrayBuffer
 class ActorMerge() extends StateMachineElement() {
 
   override def run(compiledActorGraphs: List[CompiledActorGraph]): List[CompiledActorGraph] = {
+    //For testing assume, the merge of first two actors
+    val a1 = compiledActorGraphs.head
+    val a2 = compiledActorGraphs.tail.head
+
+    val wa1 = waitGraph(a1.graph)
+    val wa2 = waitGraph(a2.graph)
+
+    val mg = generateMergedStateMachine(wa1, wa2)
+
+    val finalGraph = combineActors(mg, a1.graph, a2.graph)
+
     compiledActorGraphs
   }
 
@@ -169,6 +180,8 @@ class ActorMerge() extends StateMachineElement() {
     val globalGraph: ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
 
     //New old
+    var edgeMapping = Map[EdgeInfo, List[EdgeInfo]]()
+
     var storePosMapping = Map[EdgeInfo, EdgeInfo]()
 
     def generateGraph(fromPos: Int): Unit = {
@@ -226,9 +239,18 @@ class ActorMerge() extends StateMachineElement() {
             waitEdge = false
           }
 
-          //TODO: rewrite storeposref
+
           val newEdge = EdgeInfo(edge.label, CodeNodePos(nodePos), CodeNodePos(nextPos), edge.code, waitEdge, edge.isMethod, edge.cond, edge.storePosRef)
-          //edge.storePosRef.foreach(edge => storePosMapping = storePosMapping + (newEdge -> edge))
+
+          // Following idea:
+          // An old edge, gets duplicated n times.
+          // To know to which edge we have to jump to, we have to save a mapping from the old stored edge, to all new stored "same" edges
+          // Since at the moment of generating the code, we are not aware, where all the edges are, we save in a map, the old edge, with a list
+          // of the n new edges. Then at the end, we can replace the storePosRef with the corresponding list of edges
+          var storedEdgeMapping = edgeMapping.getOrElse(edge, List[EdgeInfo]())
+          storedEdgeMapping = newEdge :: storedEdgeMapping
+          edgeMapping = edgeMapping + (edge -> storedEdgeMapping)
+
           graph.append(newEdge)
 
           if (!edge.waitEdge) {
