@@ -4,7 +4,7 @@ import ecosim.deep.IR
 import IR.Predef._
 import IR.TopLevel._
 import IR.Predef.base.MethodApplication
-import ecosim.deep.algo.{Algo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
+import ecosim.deep.algo.{Algo, CallMethod, Foreach, DoWhile, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
 import ecosim.deep.member.{Actor, ActorType, LiftedMethod, RequestMessage, State}
 
 /** Code lifter
@@ -66,7 +66,7 @@ class Lifter {
       State(field.symbol, field.A, field.init)
     }}
     var endMethods: List[LiftedMethod[_]] = List()
-    var mainAlgo: Algo[_] = Forever(Wait())
+    var mainAlgo: Algo[_] = DoWhile(code"true", Wait())
     //lifting methods - with main method as special case
     clasz.methods.foreach(method => {
       val cde = method.body
@@ -122,7 +122,7 @@ class Lifter {
         val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()", actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"while(true) $body" =>
-        val f = Forever(liftCode(body, actorSelfVariable, clasz))
+        val f = DoWhile(code"true", liftCode(body, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"if($cond: Boolean) $ifBody:T else $elseBody: T" =>
         val f = IfThenElse(cond, liftCode(ifBody, actorSelfVariable, clasz), liftCode(elseBody, actorSelfVariable, clasz))
