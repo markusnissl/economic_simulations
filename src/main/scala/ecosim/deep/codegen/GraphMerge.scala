@@ -79,24 +79,23 @@ class GraphMerge() extends StateMachineElement() {
         entry = MergeInfo(entryOriginal.startNode, entryOriginal.middleNode, replacedNodeEnd.get)
       }
 
-      //isMethod is not relevant anymore, just interessted in first graph for different color
+      //isMethod is not relevant anymore, just interested in first graph for different color
       // Create a new edgeInfo
       val firstEdge: EdgeInfo = groupedGraphStart(entry.startNode).find(_.to.getNativeId == entry.middleNode).get
       val secondEdge: EdgeInfo = groupedGraphStart(entry.middleNode)(0)
       val newNode: EdgeInfo = EdgeInfo(firstEdge.label + ", " + secondEdge.label, firstEdge.from, secondEdge.to, code"${firstEdge.code}; ${secondEdge.code}", secondEdge.waitEdge, false, firstEdge.cond, firstEdge.storePosRef ::: secondEdge.storePosRef)
 
+      assert(secondEdge.to.getNativeId == entry.endNode)
       // Remove old edgeInfo and inserted new created ones
       groupedGraphStart(entry.startNode).remove(groupedGraphStart(entry.startNode).indexOf(firstEdge))
       groupedGraphStart(entry.middleNode).remove(0)
       groupedGraphStart(entry.startNode).append(newNode)
 
       //Keep references of replaced nodes updated
-      val rSN = replacedNodes.getOrElse(entry.startNode, entry.startNode)
-      val rSNE = replacedNodesEnd.getOrElse(entry.endNode, entry.endNode)
-      replacedNodes = replacedNodes + (entry.middleNode -> rSN)
-      replacedNodesEnd = replacedNodesEnd + (entry.middleNode -> rSNE)
-      replacedNodes.mapValues(x => if (x == entry.middleNode) rSN else x)
-      replacedNodesEnd.mapValues(x => if (x == entry.middleNode) rSNE else x)
+      replacedNodes = replacedNodes + (entry.middleNode -> entry.startNode)
+      replacedNodesEnd = replacedNodesEnd + (entry.middleNode -> entry.endNode)
+      replacedNodes = replacedNodes.mapValues(x => if (x == entry.middleNode) entry.startNode else x)
+      replacedNodesEnd = replacedNodesEnd.mapValues(x => if (x == entry.middleNode) entry.endNode else x)
     }
 
     val graph2 = groupedGraphStart.foldLeft(ArrayBuffer[EdgeInfo]())((a, b) => {

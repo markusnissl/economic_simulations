@@ -4,6 +4,7 @@ import ecosim.deep.algo.AlgoInfo.{CodeNodeMtd, CodeNodePos, EdgeInfo}
 import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Send}
 import ecosim.deep.member.{Actor, ActorType, LiftedMethod}
 import ecosim.deep.IR.Predef._
+import ecosim.deep.codegen.CreateActorGraphs.{MutVarType, methodVariableTable, methodVariableTableStack}
 import javassist.CtNewMethod
 import squid.lib.MutVar
 
@@ -34,24 +35,36 @@ class SSO extends StateMachineElement() {
       edges.foreach(edge => {
         edge.code = edge.code.rewrite({
           case code"ecosim.deep.algo.Instructions.setMethodParam(${Const(a)}, ${Const(b)}, $c)" => {
-            val variable: Variable[MutVar[Any]] = CreateActorGraphs.methodVariableTable(a)(b)
-            code"$variable := $c"
+            val variable: MutVarType[_] = methodVariableTable(a)(b)
+
+            variable match {
+              case v:MutVarType[a] => {
+                code"${v.variable} := $c.asInstanceOf[${v.codeType}]"
+              }
+              case _ => throw new RuntimeException("Illegal state")
+            }
           }
           case code"ecosim.deep.algo.Instructions.saveMethodParam(${Const(a)}, ${Const(b)}, $c)" => {
-            val stack: ArrayBuffer[Variable[ListBuffer[Any]]] = CreateActorGraphs.methodVariableTableStack(a)
+            val stack: ArrayBuffer[Variable[ListBuffer[Any]]] = methodVariableTableStack(a)
             val varstack: Variable[ListBuffer[Any]] = stack(b)
             code"$varstack.prepend($c);"
           }
           case code"ecosim.deep.algo.Instructions.restoreMethodParams(${Const(a)})" => {
-            val stack: ArrayBuffer[Variable[ListBuffer[Any]]] = CreateActorGraphs.methodVariableTableStack(a)
+            val stack: ArrayBuffer[Variable[ListBuffer[Any]]] = methodVariableTableStack(a)
             val initCode: OpenCode[Unit] = code"()"
             stack.zipWithIndex.foldRight(initCode)((c, b) => {
-              val variable: Variable[MutVar[Any]] = CreateActorGraphs.methodVariableTable(a)(c._2)
+              val variable: MutVarType[_] = methodVariableTable(a)(c._2)
               val ab = c._1
-              code"$ab.remove(0); if(!$ab.isEmpty) {$variable := $ab(0)}; $b; ()"
+              variable match {
+                case v:MutVarType[a] => {
+                  code"$ab.remove(0); if(!$ab.isEmpty) {${v.variable} := $ab(0).asInstanceOf[${v.codeType}]}; $b; ()"
+                }
+                case _ => throw new RuntimeException("Illegal state")
+              }
             })
           }
         })
+
       })
       edges
     }
@@ -180,7 +193,7 @@ class SSO extends StateMachineElement() {
         //5.2 rewrite the compile time code to runtime code ((((OOOR just copy it from the stateless server - a tad easier, a tad more restrictive)))) - try normal first
         val send = edge.sendInfo._1
         val methodId = send.methodId
-        val neededElement = rest.filter(element => element.actorTypes.exists(actorType => actorType.methods.exists(method => method.methodId == methodId))).headOption
+        val neededElement = (element :: rest).filter(element => element.actorTypes.exists(actorType => actorType.methods.exists(method => method.methodId == methodId))).headOption
         if (neededElement.isEmpty) throw new Exception("Theres a message requesting a non existent method")
         var newMethodId = -1
         if (oldToNewMtdIds.get(methodId).isDefined) {

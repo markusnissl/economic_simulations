@@ -89,7 +89,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
 
       positionMap = positionMap + (node -> code.length)
 
-      val start = groupedGraph(node)
+      val start = groupedGraph.getOrElse(node, ArrayBuffer[EdgeInfo]())
 
       //If we have more than one unknown cond, we have to store the edges to the list, so that the position can be looked up
       var unknownCondNode: Int = 0
@@ -117,7 +117,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
 
         //If there are more than one unknown cond, we have to get the position from stack
         var unknownCond: Int = 0
-        groupedGraph(target).foreach(edge2 => {
+        groupedGraph.getOrElse(target, ArrayBuffer[EdgeInfo]()).foreach(edge2 => {
           if (edge2.cond == null) {
             unknownCond = unknownCond + 1
           }

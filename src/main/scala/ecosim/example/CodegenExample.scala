@@ -4,7 +4,7 @@ import ecosim.deep.IR
 import ecosim.deep.IR.TopLevel._
 import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.EdgeInfo
-import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
+import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, DoWhile, Foreach, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
 import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline, SSO}
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
 import ecosim.example.Market
@@ -70,7 +70,7 @@ object CodegenExample extends App {
       State[List[String]](IR.methodSymbol[Market]("goods"), codeTypeOf[List[String]], code"Nil") :: Nil,
       marketFunctions,
       LetBinding(Option(bindingTest), ScalaCode[Int](code"0"),
-        Forever(
+        DoWhile(code"true",
           LetBinding(None, handleMessage,
             LetBinding(None,
               LetBinding(Option(bindingTest), ScalaCode[Int](code"$bindingTest + 1"), ScalaCode(code"""println("Binding test:",$bindingTest)""")),
@@ -128,7 +128,7 @@ object CodegenExample extends App {
         State[Int](IR.methodSymbol[Farmer]("happiness"), codeTypeOf[Int], code"0") ::
         State[List[Farmer]](IR.methodSymbol[Farmer]("peers"), codeTypeOf[List[Farmer]], code"Nil") :: Nil,
       tell :: nofifyPeers :: Nil,
-      Forever(
+      DoWhile(code"true",
         LetBinding(None,
           LetBinding[Int, Unit](Option(testResult),
             Send[Int](
@@ -159,7 +159,7 @@ object CodegenExample extends App {
       State[Int](IR.methodSymbol[ControlFlowTestObject]("y"), codeTypeOf[Int], code"0") ::
         Nil,
       Nil,
-      Forever(
+      DoWhile(code"true",
         LetBinding(None,
           IfThenElse[Unit](code"$cFself.x < 0", Wait(), IfThenElse[Unit](code"$cFself.y < 0", Wait(), NoOp())),
           Wait()

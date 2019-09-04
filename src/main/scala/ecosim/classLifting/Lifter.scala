@@ -4,7 +4,7 @@ import ecosim.deep.IR
 import IR.Predef._
 import IR.TopLevel._
 import IR.Predef.base.MethodApplication
-import ecosim.deep.algo.{Algo, CallMethod, Foreach, Forever, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
+import ecosim.deep.algo.{Algo, CallMethod, Foreach, DoWhile, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
 import ecosim.deep.member.{Actor, ActorType, LiftedMethod, RequestMessage, State}
 
 /** Code lifter
@@ -67,18 +67,19 @@ class Lifter {
       State(field.symbol, field.A, field.init)
     }}
     var endMethods: List[LiftedMethod[_]] = List()
-    var mainAlgo: Algo[_] = Forever(Wait())
+    var mainAlgo: Algo[_] = DoWhile(code"true", Wait())
     //lifting methods - with main method as special case
-    clasz.methods.foreach(method => {
-      val cde = method.body
-      val mtdBody = liftCode(cde, actorSelfVariable, clasz)
-      endMethods = (new LiftedMethod[Any](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
-        override val mtd: cls.Method[Any, cls.Scp] = method.asInstanceOf[this.cls.Method[Any,cls.Scp]]
+    clasz.methods.foreach({case method:clasz.Method[a,b] => {
+      import method.A
+      val cde:OpenCode[method.A] = method.body.asOpenCode
+      val mtdBody = liftCode[method.A](cde, actorSelfVariable, clasz)
+      endMethods = (new LiftedMethod[method.A](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
+        override val mtd: cls.Method[method.A, cls.Scp] = method.asInstanceOf[this.cls.Method[method.A,cls.Scp]]
       }) :: endMethods
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
         mainAlgo = mtdBody
       }
-    })
+    }})
     ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
   }
 
@@ -123,7 +124,7 @@ class Lifter {
         val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()", actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"while(true) $body" =>
-        val f = Forever(liftCode(body, actorSelfVariable, clasz))
+        val f = DoWhile(code"true", liftCode(body, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"if($cond: Boolean) $ifBody:T else $elseBody: T" =>
         val f = IfThenElse(cond, liftCode(ifBody, actorSelfVariable, clasz), liftCode(elseBody, actorSelfVariable, clasz))
