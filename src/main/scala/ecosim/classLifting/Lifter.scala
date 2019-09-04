@@ -112,7 +112,18 @@ class Lifter {
     */
   private def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: Actor]): Algo[T] = {
     cde match {
+      case code"val $x: squid.lib.MutVar[$xt] = squid.lib.MutVar.apply[xt]($v); $rest: T" =>
+        println(xt)
+        val f = LetBinding(
+          Some(x.asInstanceOf[Variable[Any]]),
+          liftCode(v.asInstanceOf[OpenCode[Any]], actorSelfVariable, clasz),
+          liftCode(rest, actorSelfVariable, clasz),
+          true,
+          xt
+        )
+        f.asInstanceOf[Algo[T]]
       case code"val $x: $xt = $v; $rest: T" =>
+        println(x, xt, v)
         val f = LetBinding(Some(x), liftCode(v, actorSelfVariable, clasz), liftCode(rest, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"$e; $rest: T" =>

@@ -26,7 +26,12 @@ class Market extends Actor {
   }
 
   def main() = {
-    //var x = 0
+    var x = 21
+    x = x + 1
+    var y = 11
+    var z = x+y
+    println(z)
+
     while(true) {
       handleMessages()
       //x = x + 1

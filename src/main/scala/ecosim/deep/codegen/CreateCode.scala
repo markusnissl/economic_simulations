@@ -192,7 +192,10 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
       var y = x
       compiledActorGraph.variables.foreach({
         case v => {
-          y = y.subs(v.from).~>(code"(${v.to}!).asInstanceOf[${v.A}]")
+          //Quick-fix for var types
+          if(v.from != null) {
+            y = y.subs(v.from).~>(code"(${v.to}!).asInstanceOf[${v.A}]")
+          }
         }
       })
       y

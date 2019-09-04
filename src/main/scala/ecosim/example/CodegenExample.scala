@@ -4,8 +4,8 @@ import ecosim.deep.IR
 import ecosim.deep.IR.TopLevel._
 import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.EdgeInfo
-import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Foreach, DoWhile, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
-import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline}
+import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, DoWhile, Foreach, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
+import ecosim.deep.codegen.{ActorMerge, CreateActorGraphs, CreateCode, GraphMerge, Pipeline}
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
 import ecosim.example.Market
 
@@ -32,7 +32,7 @@ object CodegenExample extends App {
     val recursiveFunction = new LiftedMethod[Unit](m, LetBinding(
       None,
       IfThenElse(code"${rFParam1}.asInstanceOf[List[Int]].tail.isEmpty == false", CallMethod[Unit](3, List(List(code"${rFParam1}.asInstanceOf[List[Int]].tail"))), NoOp[Unit]()),
-      ScalaCode(code"""println(${rFParam1}.asInstanceOf[List[Int]].head);""")
+      ScalaCode(code"""println(${rFParam1}.asInstanceOf[List[Int]].head);"""),
     ), false, 3) {
       override val mtd: cls.Method[Unit, cls.Scp] = rF.asInstanceOf[this.cls.Method[Unit, cls.Scp]]
     }
@@ -130,7 +130,7 @@ object CodegenExample extends App {
       tell :: nofifyPeers :: Nil,
       DoWhile(code"true",
         LetBinding(None,
-          LetBinding[Int, Unit](Option(testResult),
+          LetBinding(Option(testResult),
             Send[Int](
               code"$farmerSelf",
               code"$farmerSelf.market",
@@ -180,6 +180,7 @@ object CodegenExample extends App {
 
   val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
     new GraphMerge(),
+    new ActorMerge(),
     new CreateCode(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)"""),
   ))
 
