@@ -73,11 +73,13 @@ class Lifter {
       import method.A
       val cde:OpenCode[method.A] = method.body.asOpenCode
       val mtdBody = liftCode[method.A](cde, actorSelfVariable, clasz)
+
       endMethods = (new LiftedMethod[method.A](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
         override val mtd: cls.Method[method.A, cls.Scp] = method.asInstanceOf[this.cls.Method[method.A,cls.Scp]]
       }) :: endMethods
+
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
-        mainAlgo = mtdBody
+        mainAlgo = CallMethod[Unit](methodsIdMap(method.symbol), List(List()))
       }
     }})
     ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
@@ -148,6 +150,7 @@ class Lifter {
               })
             })
             IfThenElse(code"$p1.methodId==${Const(methodId)}", CallMethod[Any](methodId, argss), rest)
+
         })
 
         //for each received message, use callCode

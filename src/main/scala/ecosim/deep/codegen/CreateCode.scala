@@ -161,6 +161,9 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
         if (edge.waitEdge) {
           code(currentCodePos) = code"${code(currentCodePos)}; ${AlgoInfo.timeVar} := (${AlgoInfo.timeVar}!) + 1"
         }
+
+        //code(currentCodePos) = code"println(${Const(currentCodePos)}); ${code(currentCodePos)}"
+
       })
     }
 

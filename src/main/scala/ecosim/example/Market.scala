@@ -26,11 +26,11 @@ class Market extends Actor {
   }
 
   def main() = {
-    var x = 0
+    //var x = 0
     while(true) {
       handleMessages()
-      x = x + 1
-      println("Binding test:", x)
+      //x = x + 1
+      //println("Binding test:", x)
       sell(10)
       recursiveTest(List(10, 20, 30))
       waitTurns()
