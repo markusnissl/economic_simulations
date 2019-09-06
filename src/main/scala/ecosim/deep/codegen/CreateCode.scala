@@ -128,8 +128,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
 
         var posChanger: OpenCode[Unit] = code"${AlgoInfo.positionVar} := ${Const(nextPos)}"
         if (unknownCond > 1) {
-          //TODO, adapt for multiple stacks for merging actors
-          posChanger = code"${AlgoInfo.positionVar} := ${compiledActorGraph.positionStack.head}.remove(0); ()"
+          posChanger = code"${AlgoInfo.positionVar} := ${edge.positionStack}.remove(0).find(x => x._1 == (${Const(edge.edgeState._1)},${Const(edge.edgeState._2)})).get._2; ()"
         }
 
         val currentCodePos = code.length
@@ -173,19 +172,33 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     changeCodePos.foreach(x => {
       val c = code(x._1)
       x._2.storePosRef.foreach(edgeInfoGroup => {
-        edgeInfoGroup.foreach(edgeInfo => {
-          // TODO: adapt code for work with multi state positions
+        // It's either all (???,-1) or non of them, so either it's a direct call or it's not, since the local graph
+        // is not modified, so method inlining should be applied to all subgraphs. If there is a wait, then it should
+        // be for all as well, so this makes no difference
+        val edgeInfos = edgeInfoGroup.map(edgeInfo => {
           val startPos = edgeInfo.from.getNativeId
           val endPos = edgeInfo.to.getNativeId
-
           if (requiredSavings.contains(edgeInfo.from.getNativeId)) {
-            val newPos = posEdgeSaving((startPos, endPos))
-
-            code(x._1) = code"$c; ${compiledActorGraph.positionStack.head}.prepend(${Const(newPos)})"
+            (edgeInfo.edgeState,posEdgeSaving((startPos, endPos)), edgeInfo.positionStack, (edgeInfo.from.getNativeId, edgeInfo.to.getNativeId))
+          } else {
+            (edgeInfo.edgeState, -1, edgeInfo.positionStack, (edgeInfo.from.getNativeId, edgeInfo.to.getNativeId))
           }
         })
+
+
+        val amountM1 = edgeInfos.count(_._2 == -1)
+
+        assert(amountM1 == 0 || amountM1 == edgeInfos.length)
+
+        if (amountM1 == 0) {
+          assert(edgeInfos.count(_._3 == edgeInfos.head._3) == edgeInfos.length)
+          val startCode = code"List[((Int, Int), Int)]()"
+          val lookupT = edgeInfos.foldRight(startCode)((a, b) => code"((${Const(a._1._1)},${Const(a._1._2)}),${Const(a._2)}) :: $b")
+          code(x._1) = code"$c; ${edgeInfos.head._3}.prepend($lookupT)"
+        }
       })
     })
+
 
     //Rewrite variables to replaced ones
     code = code.map(x => {
@@ -200,6 +213,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
       })
       y
     })
+
 
 
     code.toList

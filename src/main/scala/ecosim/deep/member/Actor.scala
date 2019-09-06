@@ -57,8 +57,8 @@ class Actor {
     * @param messages Actions with receiver matching the agent from the previous step
     */
   final def addReceiveMessages(messages: List[Message]): Actor = {
-    this.receivedMessages = this.receivedMessages ::: messages.filter(x => responseListeners.get(x.sessionId).isEmpty)
-    messages.filter(x => responseListeners.get(x.sessionId).isDefined)
+    this.receivedMessages = this.receivedMessages ::: messages.filter(x => x.isInstanceOf[RequestMessage] || responseListeners.get(x.sessionId).isEmpty)
+    messages.filter(x => responseListeners.get(x.sessionId).isDefined && x.isInstanceOf[ResponseMessage])
       .foreach(x => {
         val handler = responseListeners(x.sessionId)
         responseListeners.remove(x.sessionId)

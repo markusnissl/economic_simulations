@@ -18,7 +18,7 @@ object AlgoInfo {
     this.variables = List()
     this.varSavers = List()
     this.posCounter = 0
-    this.positionStack = Variable[ListBuffer[Int]]
+    this.positionStack = Variable[ListBuffer[List[((Int, Int), Int)]]]
     this.returnValue = Variable[MutVar[Any]]
     this.responseMessage = Variable[MutVar[ResponseMessage]]
   }
@@ -53,7 +53,7 @@ object AlgoInfo {
     * This stack is used to save a position into it, so that it can be used to jump
     * to it in a later part. For example, to jump back after a method call
     */
-  var positionStack: Variable[ListBuffer[Int]] = Variable[ListBuffer[Int]]
+  var positionStack: Variable[ListBuffer[List[((Int, Int), Int)]]] = Variable[ListBuffer[List[((Int, Int), Int)]]]
 
   /**
     * This variables is used as a register to store the return value of a call.
@@ -100,6 +100,7 @@ object AlgoInfo {
     */
   abstract class CodeNode {
     def getId: String
+
     def getNativeId: Int
   }
 
@@ -114,6 +115,7 @@ object AlgoInfo {
     }
 
     override def getId: String = (pos.toString)
+
     override def getNativeId: Int = pos
   }
 
@@ -125,6 +127,7 @@ object AlgoInfo {
     */
   case class CodeNodeMtd(id: Int, end: Boolean = false) extends CodeNode {
     override def getId: String = "M" + id + (if (end) "E" else "")
+
     override def getNativeId: Int = id
   }
 
@@ -150,9 +153,13 @@ object AlgoInfo {
                       waitEdge: Boolean = false,
                       isMethod: Boolean = isMethod,
                       cond: OpenCode[Boolean] = null,
-                      var storePosRef: List[List[EdgeInfo]] = Nil) {
+                      var storePosRef: List[List[EdgeInfo]] = Nil, //Refers to callback reference in state
+                      var edgeState: (Int, Int) = (-1, -1), //Default state in (int, int), modified when merging
+                      var graphId: Int = -1,
+                      positionStack: Variable[ListBuffer[List[((Int, Int), Int)]]] = AlgoInfo.positionStack,
+                     ) {
 
-    def convertToPosOnly (methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]): Unit = {
+    def convertToPosOnly(methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]): Unit = {
       from match {
         case CodeNodeMtd(methodId, end) => {
           if (!end) {

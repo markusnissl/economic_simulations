@@ -85,10 +85,11 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
     */
   def createCompiledActorGraph(actorType: ActorType[_]): CompiledActorGraph = {
     AlgoInfo.resetData()
+
     this.variables = List()
 
     // Generate code for main
-    val main = createCode(actorType.main.asInstanceOf[Algo[Any]], false)
+    createCode(actorType.main.asInstanceOf[Algo[Any]], false)
 
     // Generate code for methods
     val methodData = actorType.methods.map({
@@ -127,7 +128,6 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
       edge.code = edge.code.rewrite({
         case code"ecosim.deep.algo.Instructions.setMethodParam(${Const(a)}, ${Const(b)}, $c)" => {
           val variable: MutVarType[_] = methodVariableTable(a)(b)
-
           variable match {
             case v:MutVarType[a] => {
               code"${v.variable} := $c.asInstanceOf[${v.codeType}]"
@@ -157,9 +157,9 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
       })
     })
 
-    variables = VarValue(AlgoInfo.returnValue,code"MutVar[Any](null)") :: VarValue(AlgoInfo.positionStack,code"ListBuffer[Int]()") :: VarValue(AlgoInfo.responseMessage,code"MutVar[ecosim.deep.member.ResponseMessage](null)") :: variables
+    variables = VarValue(AlgoInfo.returnValue,code"MutVar[Any](null)") :: VarValue(AlgoInfo.positionStack,code"ListBuffer[List[((Int,Int),Int)]]()") :: VarValue(AlgoInfo.responseMessage,code"MutVar[ecosim.deep.member.ResponseMessage](null)") :: variables
 
-    CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType), List[Variable[ListBuffer[Int]]](AlgoInfo.positionStack))
+    CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType), List[Variable[ListBuffer[List[((Int,Int),Int)]]]](AlgoInfo.positionStack))
   }
 
 
