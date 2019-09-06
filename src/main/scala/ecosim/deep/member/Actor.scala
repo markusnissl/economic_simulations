@@ -73,7 +73,11 @@ class Actor {
     * @param message Action, which should be sent to a different Agent
     */
   final def sendMessage(message: Message): Unit = {
-    sendMessages = message :: sendMessages
+    if (message.receiverId == this.id) {
+      addReceiveMessages(List(message))
+    } else {
+      sendMessages = message :: sendMessages
+    }
   }
 
   final def getSendMessages: List[Message] = {

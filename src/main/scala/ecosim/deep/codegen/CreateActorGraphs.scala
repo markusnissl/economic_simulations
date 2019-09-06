@@ -1,6 +1,7 @@
 package ecosim.deep.codegen
 
 import ecosim.deep.IR.Predef._
+import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo}
 import ecosim.deep.algo.{Algo, AlgoInfo, NoOp, ScalaCode}
 import ecosim.deep.member.ActorType
 import squid.lib.MutVar
@@ -18,7 +19,7 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
 
   override def run(): List[CompiledActorGraph] = {
     val graphs = actorTypes.map(createCompiledActorGraph)
-    graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name + "_original"))
+    //graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name + "_original"))
     graphs
   }
 
@@ -103,9 +104,25 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
       })
     })
 
+    expandEndNodes()
+
     variables = VarValue(AlgoInfo.returnValue, code"MutVar[Any](null)") :: VarValue(AlgoInfo.positionStack, code"ListBuffer[List[((Int,Int),Int)]]()") :: VarValue(AlgoInfo.responseMessage, code"MutVar[ecosim.deep.member.ResponseMessage](null)") :: variables
 
     CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType), List[Variable[ListBuffer[List[((Int, Int), Int)]]]](AlgoInfo.positionStack))
+  }
+
+  // expand with a loop at the end, so that we wait at the end until finished (no dead end)
+  def expandEndNodes(): Unit = {
+    val graphEnd = AlgoInfo.stateGraph.groupBy(_.to.getNativeId)
+    val graphStart = AlgoInfo.stateGraph.groupBy(_.from.getNativeId)
+
+    graphEnd.foreach(x => {
+      if (!graphStart.contains(x._1)) {
+        AlgoInfo.stateGraph.append(EdgeInfo("endWait", CodeNodePos(x._1), CodeNodePos(AlgoInfo.posCounter), code"()", true))
+        AlgoInfo.stateGraph.append(EdgeInfo("endWait r", CodeNodePos(AlgoInfo.posCounter), CodeNodePos(x._1), code"()", false))
+        AlgoInfo.nextPos()
+      }
+    })
   }
 
   /**

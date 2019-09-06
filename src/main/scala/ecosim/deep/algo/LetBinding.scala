@@ -30,7 +30,7 @@ case class LetBinding[V, A: CodeType, T: CodeType](bound: Option[Variable[V]], v
         val met2 = code"""$x := ((${AlgoInfo.returnValue}!).asInstanceOf[T]); ()"""
         println(met2)
         AlgoInfo.variables = VarWrapper(null, x) :: AlgoInfo.variables
-        AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("LetBinding met2", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), met2, positionStack = AlgoInfo.positionStack))
+        AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("LetBinding met2", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), met2))
         AlgoInfo.nextPos()
 
         rest.codegen
@@ -59,7 +59,8 @@ case class LetBinding[V, A: CodeType, T: CodeType](bound: Option[Variable[V]], v
 
         // If variable is defined here, remove it for the outer block again, it was defined only for the sub-block
         if (!contained) {
-          AlgoInfo.varSavers = AlgoInfo.varSavers.filter(_.from != bound.get)
+          //A variable is only defined once in squid
+          //AlgoInfo.varSavers = AlgoInfo.varSavers.filter(_.from != bound.get)
         }
       }
 

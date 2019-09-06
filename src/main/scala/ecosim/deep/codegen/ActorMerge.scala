@@ -18,6 +18,7 @@ class ActorMerge() extends StateMachineElement() {
 
     val wa1 = waitGraph(a1.graph)
     //GraphDrawing.drawGraph(wa1, a1.name + "_wait")
+
     val wa2 = waitGraph(a2.graph)
     //GraphDrawing.drawGraph(wa2, a2.name + "_wait")
 
@@ -56,6 +57,12 @@ class ActorMerge() extends StateMachineElement() {
       }
 
       val startNode = graphStart.getOrElse(currentNode, ArrayBuffer())
+
+      //NOTE: this cannot happen due to extension at creating
+      if(startNode.isEmpty) {
+        println("End node", currentNode)
+      }
+
       startNode.foreach(edge => {
         //Remove all data about the node, make it as abstract as possible
         val edgeTargetPos = edge.to.getNativeId
@@ -215,12 +222,15 @@ class ActorMerge() extends StateMachineElement() {
       // Graph 2: reset for each subgraph (wait per graph1)
       val posMapping2 = collection.mutable.Map[Int, Int]()
 
-      println("FROM POS: " + fromPos)
-
       def generateEdges(graphStart: Map[Int, ArrayBuffer[EdgeInfo]], graphPos: Int, graphStart2: Map[Int, ArrayBuffer[EdgeInfo]], graphPos2: Int, posMappingI: collection.mutable.Map[Int, Int]): Unit = {
-        val start1Edges = graphStart(graphPos)
+        val start1Edges = graphStart.getOrElse(graphPos, ArrayBuffer())
 
         val nodePos = posCounter
+
+        //This cannot happen, due to extension at beginning ... No node from this edge, continue with second graph here
+        if (start1Edges.isEmpty) {
+          println("End reached", graphPos, start)
+        }
 
         start1Edges.foreach(edge => {
           val edgeTargetId: Int = edge.to.getNativeId
@@ -231,7 +241,7 @@ class ActorMerge() extends StateMachineElement() {
             return
           }
           if (graphStart2 == null && !reachableStates.filter(_._1 == reachedStateTmp).exists(x => graph2Reachable.getOrElse(edgeTargetId, List()).contains(x._2))) {
-            println("DEBUG 2: State not possible", graphPos, edgeTargetId)
+            println("DEBUG 2: State not possible", graphPos, edgeTargetId, reachedStateTmp)
             return
           }
           /*if (graph1Reachable(edgeTarget)) {

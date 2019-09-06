@@ -16,8 +16,8 @@ case class DoWhile(cond: OpenCode[Boolean], body: Algo[_]) extends Algo[Unit] {
     body.codegen
 
     AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("DoWhile true", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(tmpPos), code"()", cond = code"$cond"))
-    //AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("DoWhile false", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), code"()", cond=code"!$cond"))
-    //AlgoInfo.nextPos()
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("DoWhile false", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), code"()", cond=code"!$cond"))
+    AlgoInfo.nextPos()
   }
 
 }

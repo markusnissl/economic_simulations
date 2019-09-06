@@ -12,7 +12,7 @@ class GraphMerge() extends StateMachineElement() {
       element.graph = optimizeCode(element.graph)
       element
     })
-    graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name + "_commandmerged"))
+    //graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name + "_commandmerged"))
     graphs
   }
 

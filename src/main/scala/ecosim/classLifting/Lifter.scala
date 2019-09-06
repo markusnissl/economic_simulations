@@ -126,7 +126,6 @@ class Lifter {
   private def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: Actor]): Algo[T] = {
     cde match {
       case code"val $x: squid.lib.MutVar[$xt] = squid.lib.MutVar.apply[xt]($v); $rest: T " =>
-        println(xt)
         val f = LetBinding(
           Some(x.asInstanceOf[Variable[Any]]),
           liftCode(v.asInstanceOf[OpenCode[Any]], actorSelfVariable, clasz),
@@ -136,7 +135,6 @@ class Lifter {
         )
         f.asInstanceOf[Algo[T]]
       case code"val $x: $xt = $v; $rest: T " =>
-        println(x, xt, v)
         val f = LetBinding(Some(x), liftCode(v, actorSelfVariable, clasz), liftCode(rest, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"$e; $rest: T " =>
@@ -162,7 +160,8 @@ class Lifter {
         //as any of this class' methods, and calls the method if it is
         val resultMessageCall = Variable[Any]
         val p1 = Variable[RequestMessage]
-        val algo: Algo[Any] = NoOp()
+        //Default, add back, if message is not for my message handler, it its for a merged actor
+        val algo: Algo[Any] = ScalaCode(code"$actorSelfVariable.addReceiveMessages(List($p1))")
         val callCode = clasz.methods.foldRight(algo)((method, rest) => {
           val methodId = methodsIdMap(method.symbol)
           val methodInfo = methodsMap(method.symbol)
@@ -172,18 +171,18 @@ class Lifter {
               code"$p1.argss(${Const(x._2)})(${Const(y._2)})"
             })
           })
-          IfThenElse(code"$p1.methodId==${Const(methodId)}", CallMethod[Any](methodId, argss), rest)
+          IfThenElse(
+            code"$p1.methodId==${Const(methodId)}",
+            LetBinding(Option(resultMessageCall),CallMethod[Any](methodId, argss),ScalaCode(code"""$p1.reply($actorSelfVariable, $resultMessageCall)""")),
+            rest
+          )
 
         })
 
         //for each received message, use callCode
         val handleMessage = Foreach(
           code"$actorSelfVariable.popRequestMessages",
-          p1, LetBinding(
-            Option(resultMessageCall),
-            callCode,
-            ScalaCode(code"""$p1.reply($actorSelfVariable, $resultMessageCall)""")
-          )
+          p1, callCode
         )
         handleMessage.asInstanceOf[Algo[T]]
       case code"${MethodApplication(ma)}:Any " if methodsIdMap.get(ma.symbol).isDefined =>

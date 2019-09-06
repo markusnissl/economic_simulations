@@ -83,6 +83,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     var changeCodePos: List[(Int, EdgeInfo)] = List()
     var requiredSavings: List[Int] = List()
     var posEdgeSaving: Map[(Int, Int), Int] = Map()
+    var edgeSaving: Map[(Int, Int), Int] = Map()
 
     def generateCodeInner(node: Int): Unit = {
 
@@ -121,12 +122,10 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
             unknownCond = unknownCond + 1
           }
         })
-        if (unknownCond > 1) {
-          requiredSavings = target :: requiredSavings
-        }
 
         var posChanger: OpenCode[Unit] = code"${AlgoInfo.positionVar} := ${Const(nextPos)}"
         if (unknownCond > 1) {
+          requiredSavings = target :: requiredSavings
           posChanger = code"${AlgoInfo.positionVar} := ${edge.positionStack}.remove(0).find(x => x._1 == (${Const(edge.edgeState._1)},${Const(edge.edgeState._2)})).get._2; ()"
         }
 
@@ -138,6 +137,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
         if (unknownCondNode > 1 && edge.cond == null) {
           posEdgeSaving = posEdgeSaving + ((node, target) -> currentCodePos)
         }
+        edgeSaving = edgeSaving + ((node, target) -> currentCodePos)
 
         if (edge.cond != null) {
           code.append(code"if(${edge.cond}) {${edge.code}; $posChanger} else {}")
@@ -171,30 +171,49 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     changeCodePos.foreach(x => {
       val c = code(x._1)
       x._2.storePosRef.foreach(edgeInfoGroup => {
-        // It's either all (???,-1) or non of them, so either it's a direct call or it's not, since the local graph
-        // is not modified, so method inlining should be applied to all subgraphs. If there is a wait, then it should
-        // be for all as well, so this makes no difference
+
+        var amountM1: Int = 0
+
         val edgeInfos = edgeInfoGroup.map(edgeInfo => {
           val startPos = edgeInfo.from.getNativeId
           val endPos = edgeInfo.to.getNativeId
-          if (requiredSavings.contains(edgeInfo.from.getNativeId)) {
-            (edgeInfo.edgeState, posEdgeSaving((startPos, endPos)), edgeInfo.positionStack, (edgeInfo.from.getNativeId, edgeInfo.to.getNativeId))
-          } else {
-            (edgeInfo.edgeState, -1, edgeInfo.positionStack, (edgeInfo.from.getNativeId, edgeInfo.to.getNativeId))
+          if (!requiredSavings.contains(edgeInfo.from.getNativeId)) {
+            amountM1 = amountM1 + 1
           }
+          (edgeInfo.edgeState, edgeSaving((startPos, endPos)), edgeInfo.positionStack, (edgeInfo.from.getNativeId, edgeInfo.to.getNativeId))
         })
 
-
-        val amountM1 = edgeInfos.count(_._2 == -1)
-
+        //The basic idea was this, but it may not hold, therefore this assert to change the implementation
+        //It's either all or non of them, so either it's a direct call or it's not, since the local graph
+        //is not modified, so method inlining should be applied to all subgraphs. If there is a wait, then it should
+        //be for all as well, so this makes no difference
         assert(amountM1 == 0 || amountM1 == edgeInfos.length)
+        
 
+        //There are some edges, which require a stack value
+        //At the moment, we can assume, that there are either all edges not needing a jump position or not
+        //if (amountM1 < edgeInfos.length) {
         if (amountM1 == 0) {
           assert(edgeInfos.count(_._3 == edgeInfos.head._3) == edgeInfos.length)
           val startCode = code"List[((Int, Int), Int)]()"
           val lookupT = edgeInfos.foldRight(startCode)((a, b) => code"((${Const(a._1._1)},${Const(a._1._2)}),${Const(a._2)}) :: $b")
           code(x._1) = code"$c; ${edgeInfos.head._3}.prepend($lookupT)"
         }
+        //Find edges, which have no poping added and append poping from stack to remove value if added before
+        /*if (amountM1 != edgeInfos.length) {
+          edgeInfoGroup.foreach(edgeInfo => {
+            if (!requiredSavings.contains(edgeInfo.from.getNativeId)) {
+              val startPos = edgeInfo.from.getNativeId
+              val endPos = edgeInfo.to.getNativeId
+              val codePos:Int = edgeSaving((startPos, endPos))
+              val c1 = code"${edgeInfo.positionStack}.remove(0); ()"
+              val c2 = code(codePos)
+              code(codePos) = code"$c2; $c1"
+            }
+          })
+        }*/
+
+
       })
     })
 
@@ -212,7 +231,6 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
       })
       y
     })
-
 
     code.toList
   }
