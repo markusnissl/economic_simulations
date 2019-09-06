@@ -1,6 +1,6 @@
 package old
 
-import SimLib._
+import old.SimLib._
 
 
 object MainExample {
@@ -37,9 +37,7 @@ object MainExample {
   }
 }
 
-object TradingExample {
-
-  import Owner._;
+object TradingExample {;
 
   val simu = new Simulation;
 

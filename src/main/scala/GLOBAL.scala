@@ -1,19 +1,18 @@
 package GLOBAL {
 
-class Dummy;
+  class Dummy;
 
 }
 
 package object GLOBAL {
-  var silent = false
   val rnd = util.Random
-
   val RUN_SPARK = false
+  var silent = false
 
-  def mapopt[A,B](l: List[A], f: A => Option[B]) : List[B] =
+  def mapopt[A, B](l: List[A], f: A => Option[B]): List[B] =
     l.flatMap((a: A) => f(a) match {
       case Some(b) => List(b)
-      case None    => List()
+      case None => List()
     })
 }
 

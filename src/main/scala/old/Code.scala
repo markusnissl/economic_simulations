@@ -220,151 +220,151 @@ package object code {
 
 }
 
-  /**
-    * This class is needed as a wrapper so that value can be used as 'out' parameter for returning result
-    */
-  class ReturnValue extends Serializable {
-    var value:Any = null
+/**
+  * This class is needed as a wrapper so that value can be used as 'out' parameter for returning result
+  */
+class ReturnValue extends Serializable {
+  var value: Any = null
+}
+
+
+abstract class Instruction extends Serializable
+
+/** An instruction that can be directly executed. */
+abstract class SimpleInstruction extends Instruction {
+  def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int
+}
+
+case class __wait[T](ticks: T) extends SimpleInstruction {
+  def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = pos + 1
+}
+
+class __call(f: => Int) extends SimpleInstruction {
+  def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
+    executionStack.prepend(pos + 1) //Return to next pos
+    f
+  }
+}
+
+object __call {
+  def apply(f: => Int) = new __call(f)
+}
+
+case class __return() extends SimpleInstruction {
+  def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
+    executionStack.remove(0).asInstanceOf[Int]
+  }
+}
+
+class __goto(_cond: => Boolean, _next_pos: Int) extends SimpleInstruction {
+  val next_pos = _next_pos
+
+  def cond = _cond
+
+  def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = if (_cond) _next_pos else pos + 1
+
+  override def toString = "__goto(?, " + _next_pos + ")"
+}
+
+object __goto {
+  def apply(cond: => Boolean, next_pos: Int) = new __goto(cond, next_pos)
+
+  def unapply(g: __goto): Some[(() => Boolean, Int)] =
+    Some((g.cond _, g.next_pos))
+}
+
+/** This is not a case class but a class with a companion object because
+  * val parameters may not be call by name. Same for [[__goto]],
+  * [[__repeat]], and [[__dowhile]].
+  */
+class __do(f: => Any) extends SimpleInstruction {
+  def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
+    returnValue.value = f;
+    pos + 1
   }
 
+  override def toString = "__do{?}"
+}
 
-  abstract class Instruction extends Serializable
+object __do {
+  def apply(f: => Any) = new __do(f)
+}
 
-  /** An instruction that can be directly executed. */
-  abstract class SimpleInstruction extends Instruction {
-    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int
+// For handling the result of the previous do
+class __doResult(f: Any => Any) extends SimpleInstruction {
+  def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
+    returnValue.value = f(returnValue.value);
+    pos + 1
   }
 
-  case class __wait[T](ticks: T) extends SimpleInstruction {
-    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = pos + 1
-  }
-
-  class __call(f: => Int) extends  SimpleInstruction {
-    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
-      executionStack.prepend(pos+1) //Return to next pos
-      f
-    }
-  }
-
-  object __call {
-    def apply(f: => Int) = new __call(f)
-  }
-
-  case class __return() extends SimpleInstruction {
-    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
-      executionStack.remove(0).asInstanceOf[Int]
-    }
-  }
-
-  class __goto(_cond: => Boolean, _next_pos: Int) extends SimpleInstruction {
-    def cond = _cond
-
-    val next_pos = _next_pos
-
-    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = if (_cond) _next_pos else pos + 1
-
-    override def toString = "__goto(?, " + _next_pos + ")"
-  }
-
-  object __goto {
-    def apply(cond: => Boolean, next_pos: Int) = new __goto(cond, next_pos)
-
-    def unapply(g: __goto): Some[(() => Boolean, Int)] =
-      Some((g.cond _, g.next_pos))
-  }
-
-  /** This is not a case class but a class with a companion object because
-    * val parameters may not be call by name. Same for [[__goto]],
-    * [[__repeat]], and [[__dowhile]].
-    */
-  class __do(f: => Any) extends SimpleInstruction {
-    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
-      returnValue.value = f;
-      pos + 1
-    }
-
-    override def toString = "__do{?}"
-  }
-
-  object __do {
-    def apply(f: => Any) = new __do(f)
-  }
-
-  // For handling the result of the previous do
-  class __doResult(f: Any => Any) extends SimpleInstruction {
-    def exec(pos: Int, executionStack: ListBuffer[Any], returnValue: ReturnValue): Int = {
-      returnValue.value = f(returnValue.value);
-      pos + 1
-    }
-
-    override def toString = "__doResult{?}"
-  }
+  override def toString = "__doResult{?}"
+}
 
 
-  object __doResult {
-    def apply(f: Any => Any) = new __doResult(f)
-  }
+object __doResult {
+  def apply(f: Any => Any) = new __doResult(f)
+}
 
-  /** An instruction that needs to be compiled down to SimpleInstructions
-    * for the program to be executable.
-    */
-  abstract class SugarInstruction extends Instruction
+/** An instruction that needs to be compiled down to SimpleInstructions
+  * for the program to be executable.
+  */
+abstract class SugarInstruction extends Instruction
 
-  case class __forever(block: Instruction*) extends SugarInstruction
+case class __forever(block: Instruction*) extends SugarInstruction
 
-  case class __doblock(block: Instruction*) extends SugarInstruction
+case class __doblock(block: Instruction*) extends SugarInstruction
 
-  /** WARNING: compiling [[__repeat]] creates state that cannot be copied when
-    * copying a simulation.
-    */
-  class __repeat(_k: => Int, _block: Instruction*) extends SugarInstruction {
-    def k = _k
+/** WARNING: compiling [[__repeat]] creates state that cannot be copied when
+  * copying a simulation.
+  */
+class __repeat(_k: => Int, _block: Instruction*) extends SugarInstruction {
+  val block = _block
 
-    val block = _block
+  def k = _k
 
-    override def toString = "__repeat(?, " + block + ")"
-  }
+  override def toString = "__repeat(?, " + block + ")"
+}
 
-  object __repeat {
-    def apply(k: => Int, _block: Instruction*) = new __repeat(k, (_block: _*))
+object __repeat {
+  def apply(k: => Int, _block: Instruction*) = new __repeat(k, (_block: _*))
 
-    def unapply(r: __repeat): Some[(() => Int, Seq[Instruction])] =
-      Some((r.k _, r.block))
-  }
+  def unapply(r: __repeat): Some[(() => Int, Seq[Instruction])] =
+    Some((r.k _, r.block))
+}
 
-  class __dowhile(_cond: => Boolean,
-                  _block: Instruction*) extends SugarInstruction {
-    def cond = _cond
+class __dowhile(_cond: => Boolean,
+                _block: Instruction*) extends SugarInstruction {
+  val block = _block
 
-    val block = _block
+  def cond = _cond
 
-    override def toString = "__dowhile(" + block + ")(?)"
-  }
+  override def toString = "__dowhile(" + block + ")(?)"
+}
 
-  object __dowhile {
-    def apply(_block: Instruction*)(_cond: => Boolean) =
-      new __dowhile(_cond, (_block: _*))
+object __dowhile {
+  def apply(_block: Instruction*)(_cond: => Boolean) =
+    new __dowhile(_cond, (_block: _*))
 
-    def unapply(r: __dowhile): Some[(Seq[Instruction], () => Boolean)] =
-      Some((r.block, r.cond _))
-  }
+  def unapply(r: __dowhile): Some[(Seq[Instruction], () => Boolean)] =
+    Some((r.block, r.cond _))
+}
 
-  class __if(_cond: => Boolean, _block: Instruction*) extends SugarInstruction {
-    def cond = _cond
+class __if(_cond: => Boolean, _block: Instruction*) extends SugarInstruction {
+  val block = _block
 
-    val block = _block
+  def cond = _cond
 
-    override def toString = "__if(?) {" + block + "}"
-  } // package code
+  override def toString = "__if(?) {" + block + "}"
+} // package code
 
 
 object __if {
-    def apply(_cond: => Boolean)(_block: Instruction*) =
-      new __if(_cond, (_block: _*))
+  def apply(_cond: => Boolean)(_block: Instruction*) =
+    new __if(_cond, (_block: _*))
 
-    def unapply(r: __if): Some[(() => Boolean, Seq[Instruction])] =
-      Some((r.cond _, r.block))
-  } // end package object code
+  def unapply(r: __if): Some[(() => Boolean, Seq[Instruction])] =
+    Some((r.cond _, r.block))
+} // end package object code
 
 
 

@@ -42,14 +42,14 @@ case class ResponseMessage(override val senderId: Actor.AgentId, override val re
 
 class Actor {
   var id = Actor.getNextAgentId
+  var timer: Int = 0
+  var current_pos: Int = 0
   /**
     * Contains the received messages from the previous step
     */
   protected var receivedMessages: List[Message] = List()
   protected var sendMessages: List[Message] = List()
   protected var responseListeners: collection.mutable.Map[String, Message => Unit] = collection.mutable.Map()
-
-  def stepFunction: (Int, Int) = (current_pos, timer+1)
 
   /**
     * Adds a list of messages to the agent
@@ -107,9 +107,6 @@ class Actor {
     rM
   }
 
-  var timer: Int = 0
-  var current_pos: Int = 0
-
   def run_until(until: Int): Actor = {
     while (timer <= until) {
       println(this.getClass.getSimpleName, timer, until, current_pos)
@@ -119,4 +116,6 @@ class Actor {
     }
     this
   }
+
+  def stepFunction: (Int, Int) = (current_pos, timer + 1)
 }

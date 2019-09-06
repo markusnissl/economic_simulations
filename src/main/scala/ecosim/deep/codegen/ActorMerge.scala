@@ -1,8 +1,7 @@
 package ecosim.deep.codegen
 
-import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo, MergeInfo}
-import ecosim.deep.member.ActorType
 import ecosim.deep.IR.Predef._
+import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo, MergeInfo}
 
 import scala.collection.mutable.ArrayBuffer
 

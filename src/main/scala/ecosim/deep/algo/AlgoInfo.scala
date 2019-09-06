@@ -12,6 +12,53 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
   */
 object AlgoInfo {
 
+  /**
+    * Variable containing the current execution time.
+    * Need to be increased, if some waiting has to be done after
+    * finishing the current step
+    */
+  val timeVar: Variable[MutVar[Int]] = Variable[MutVar[Int]]
+  /**
+    * Variable containing the current position of the program.
+    * It needs to be modified if the next step is not the next
+    * program fragment, but a jump to somewhere else
+    */
+  val positionVar: Variable[MutVar[Int]] = Variable[MutVar[Int]]
+  /**
+    * This stack is used to save a position into it, so that it can be used to jump
+    * to it in a later part. For example, to jump back after a method call
+    */
+  var positionStack: Variable[ListBuffer[List[((Int, Int), Int)]]] = Variable[ListBuffer[List[((Int, Int), Int)]]]
+  /**
+    * This variables is used as a register to store the return value of a call.
+    */
+  var returnValue: Variable[MutVar[Any]] = Variable[MutVar[Any]]
+  /**
+    * This variable is used to save data about the response message, if a blocking call is made
+    */
+  var responseMessage: Variable[MutVar[ResponseMessage]] = Variable[MutVar[ResponseMessage]]
+  /**
+    * List, saving all variables, which should be defined at the beginning
+    */
+  var variables: List[VarWrapper[_]] = List()
+  /**
+    * List, saving all variables already defined, so that a redefinement of the variable
+    * is not necessary inside the used fragment.
+    */
+  var varSavers: List[VarWrapper[_]] = List[VarWrapper[_]]()
+  /**
+    * Current position/code fragment
+    */
+  var posCounter = 0
+  /**
+    * IF inside method, set to true, so that graph knows about that (just for displaying in a different color atm)
+    */
+  var isMethod = false
+  /**
+    * Stores the edges to build up a state transition graph
+    */
+  var stateGraph: ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
+
   //This resets the variables which have to be unique per actorType
   def resetData(): Unit = {
     this.stateGraph.clear()
@@ -21,6 +68,34 @@ object AlgoInfo {
     this.positionStack = Variable[ListBuffer[List[((Int, Int), Int)]]]
     this.returnValue = Variable[MutVar[Any]]
     this.responseMessage = Variable[MutVar[ResponseMessage]]
+  }
+
+  /**
+    * Helper, for jumping relativly to a different position
+    *
+    * @param offset relative jumping offset
+    * @return Code containing the position modification
+    */
+  def jump(offset: Int) = code"$positionVar := ($positionVar!) + ${Const(offset)}"
+
+  /**
+    * Go to next code fragment
+    */
+  def nextPos() {
+    posCounter += 1
+  }
+
+  def convertStageGraph(methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]) {
+    AlgoInfo.stateGraph.foreach(_.convertToPosOnly(methodLookupTable, methodLookupTableEnd))
+  }
+
+  /**
+    * Wrapper class for modeling a node id, which can ether be a method id or a position
+    */
+  abstract class CodeNode {
+    def getId: String
+
+    def getNativeId: Int
   }
 
   /**
@@ -34,75 +109,6 @@ object AlgoInfo {
     * @tparam C type of original variable
     */
   case class VarWrapper[C](from: Variable[C], to: Variable[MutVar[C]])(implicit val A: CodeType[C])
-
-  /**
-    * Variable containing the current execution time.
-    * Need to be increased, if some waiting has to be done after
-    * finishing the current step
-    */
-  val timeVar: Variable[MutVar[Int]] = Variable[MutVar[Int]]
-
-  /**
-    * Variable containing the current position of the program.
-    * It needs to be modified if the next step is not the next
-    * program fragment, but a jump to somewhere else
-    */
-  val positionVar: Variable[MutVar[Int]] = Variable[MutVar[Int]]
-
-  /**
-    * This stack is used to save a position into it, so that it can be used to jump
-    * to it in a later part. For example, to jump back after a method call
-    */
-  var positionStack: Variable[ListBuffer[List[((Int, Int), Int)]]] = Variable[ListBuffer[List[((Int, Int), Int)]]]
-
-  /**
-    * This variables is used as a register to store the return value of a call.
-    */
-  var returnValue: Variable[MutVar[Any]] = Variable[MutVar[Any]]
-
-  /**
-    * This variable is used to save data about the response message, if a blocking call is made
-    */
-  var responseMessage: Variable[MutVar[ResponseMessage]] = Variable[MutVar[ResponseMessage]]
-
-  /**
-    * List, saving all variables, which should be defined at the beginning
-    */
-  var variables: List[VarWrapper[_]] = List()
-  /**
-    * List, saving all variables already defined, so that a redefinement of the variable
-    * is not necessary inside the used fragment.
-    */
-  var varSavers: List[VarWrapper[_]] = List[VarWrapper[_]]()
-
-  /**
-    * Helper, for jumping relativly to a different position
-    *
-    * @param offset relative jumping offset
-    * @return Code containing the position modification
-    */
-  def jump(offset: Int) = code"$positionVar := ($positionVar!) + ${Const(offset)}"
-
-  /**
-    * Current position/code fragment
-    */
-  var posCounter = 0
-
-  /**
-    * Go to next code fragment
-    */
-  def nextPos() {
-    posCounter += 1
-  }
-
-  /**
-    * Wrapper class for modeling a node id, which can ether be a method id or a position
-    */
-  abstract class CodeNode {
-    def getId: String
-
-    def getNativeId: Int
-  }
 
   /**
     * Node for a position in code
@@ -130,11 +136,6 @@ object AlgoInfo {
 
     override def getNativeId: Int = id
   }
-
-  /**
-    * IF inside method, set to true, so that graph knows about that (just for displaying in a different color atm)
-    */
-  var isMethod = false
 
   /**
     * Models an edge between to nodes
@@ -185,14 +186,5 @@ object AlgoInfo {
   }
 
   case class MergeInfo(from: CodeNodePos, to: CodeNodePos, graph1: (CodeNodePos, CodeNodePos), graph2: (CodeNodePos, CodeNodePos))
-
-  /**
-    * Stores the edges to build up a state transition graph
-    */
-  var stateGraph: ArrayBuffer[EdgeInfo] = ArrayBuffer[EdgeInfo]()
-
-  def convertStageGraph(methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]) {
-    AlgoInfo.stateGraph.foreach(_.convertToPosOnly(methodLookupTable, methodLookupTableEnd))
-  }
 }
 

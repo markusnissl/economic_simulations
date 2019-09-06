@@ -1,6 +1,6 @@
 package old
 
-import timeseries.TimeseriesC
+import old.timeseries.TimeseriesC
 
 case class LogList[T](var l: List[(Int, T)] = List[(Int, T)](),
                       private var latest: Int = 0

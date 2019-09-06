@@ -1,6 +1,5 @@
 package ecosim.deep.algo
 
-import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 
 /**
@@ -9,7 +8,7 @@ import ecosim.deep.IR.Predef._
 case class Wait() extends Algo[Unit] {
 
   override def codegen: Unit = {
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("wait", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), code"()", waitEdge = true))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("wait", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), code"()", waitEdge = true))
     AlgoInfo.nextPos
   }
 }

@@ -13,14 +13,15 @@ class Source(commodity: Commodity, units: Int, p: Int) extends SimO with SimpleS
 
   }
 
-  override def mycopy():Source = {
+  var initC = 0
+
+  override def mycopy(): Source = {
     val n = new Source(commodity, units, p)
     copy_state_to(n)
     n
   }
 
-  var initC = 0
-  def action = __do{
+  def action = __do {
     if (initC == 0) {
       sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, commodity))
       initC = 1
@@ -33,6 +34,7 @@ class Source(commodity: Commodity, units: Int, p: Int) extends SimO with SimpleS
 
     }
   }
+
   override def price(dummy: Commodity) = Some(p)
 }
 
@@ -98,7 +100,7 @@ class CattleFarm extends Factory(
 
 class McDonalds extends Factory(
   ProductionLineSpec(1, List(), List((Commodities.Flour, 10), (Commodities.Beef, 5)),
-                 (Commodities.Burger, 10), 2))
+    (Commodities.Burger, 10), 2))
 
 
 

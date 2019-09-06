@@ -1,9 +1,6 @@
 package ecosim.deep.algo
 
-import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
-
-import scala.collection.mutable.ListBuffer
 
 case class IfThenElse[A](cond: OpenCode[Boolean], ifBody: Algo[A], elseBody: Algo[A])(implicit val A: CodeType[A]) extends Algo[A] {
 
@@ -25,8 +22,8 @@ case class IfThenElse[A](cond: OpenCode[Boolean], ifBody: Algo[A], elseBody: Alg
 
     elseBody.codegen
 
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("IfThenElse cond valid",AlgoInfo.CodeNodePos(tmpPosMet1), AlgoInfo.CodeNodePos(tmpPosMet1+1), code"()", cond=code"$cond"))
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("IfThenElse cond invalid",AlgoInfo.CodeNodePos(tmpPosMet1), AlgoInfo.CodeNodePos(tmpPosMetInner+1), code"()", cond=code"!$cond"))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("IfThenElse cond valid", AlgoInfo.CodeNodePos(tmpPosMet1), AlgoInfo.CodeNodePos(tmpPosMet1 + 1), code"()", cond = code"$cond"))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("IfThenElse cond invalid", AlgoInfo.CodeNodePos(tmpPosMet1), AlgoInfo.CodeNodePos(tmpPosMetInner + 1), code"()", cond = code"!$cond"))
 
 
     AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("IfThenElse jump end else", AlgoInfo.CodeNodePos(tmpPosMetInner), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), code"()"))

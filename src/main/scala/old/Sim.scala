@@ -1,6 +1,6 @@
 package old
 
-import Owner._
+import old.Owner._
 import simulation.{MarketBuySellerMessage, Message}
 
 import scala.collection.mutable.ListBuffer
@@ -8,32 +8,15 @@ import scala.collection.mutable.ListBuffer
 
 trait Sim {
   type T = Int // time type
-  private val zero : T = 0
-
-  // BEGIN state
-  protected var current_pos  : Int = 0
-  var main_pos  : Int = 0
-  protected var current_time : T   = zero
+  private val zero: T = 0
+  private val execStack: ListBuffer[Any] = ListBuffer()
+  private val returnValue: ReturnValue = new ReturnValue()
+  var main_pos: Int = 0
   // END state
-
-  protected def algo   : Instruction
-  var algo_c : Vector[SimpleInstruction] = code.compile(algo)
-
-  /** Call from the constructor in inheriting classes. */
-  protected def init(start_time: T) {
-    current_pos    = main_pos;
-    current_time   = start_time;
-    //algo_c = compile(algo)
-  }
-
-  protected def copy_state_to(_to: Sim) {
-    _to.current_pos    = current_pos
-    _to.current_time   = current_time;
-    //_to.algo_c = compile(_to.algo);
-  }
-
-  private val execStack:ListBuffer[Any] = ListBuffer()
-  private val returnValue:ReturnValue = new ReturnValue()
+  var algo_c: Vector[SimpleInstruction] = code.compile(algo)
+  // BEGIN state
+  protected var current_pos: Int = 0
+  protected var current_time: T = zero
 
   /** Runs until at most time `until`. */
   def run_until(until: T) = {
@@ -45,6 +28,21 @@ trait Sim {
     (this, next_goal_time)
   }
 
+  protected def algo: Instruction
+
+  /** Call from the constructor in inheriting classes. */
+  protected def init(start_time: T) {
+    current_pos = main_pos;
+    current_time = start_time;
+    //algo_c = compile(algo)
+  }
+
+  protected def copy_state_to(_to: Sim) {
+    _to.current_pos = current_pos
+    _to.current_time = current_time;
+    //_to.algo_c = compile(_to.algo);
+  }
+
 }
 
 
@@ -52,13 +50,14 @@ object Sim {
 
   def execp(sims: Seq[Sim], start_time: Int, end_time: Int) =
     code.execp[Sim, Int](sims, (s: Sim, t: Int) => s.run_until(t),
-                         start_time, end_time)
+      start_time, end_time)
 
 } // end object Sim.
 
 
 trait SimpleSim extends Sim {
-  def action : Instruction
+  def action: Instruction
+
   override def algo = __forever(action, __wait(1))
 }
 
@@ -69,15 +68,15 @@ abstract class SimO(start_time: Int = 0) extends Seller with Sim {
     super[Sim].init(start_time)
   }
 
+  def mycopy(): SimO
+
   protected def copy_state_to(_to: SimO) = {
     super[Seller].copy_state_to(_to);
     super[Sim].copy_state_to(_to);
   }
 
-  def mycopy(): SimO
-
   // Put it here instead of seller, since there i have access to time
-  setMessageHandler("MarketBuySellerMessage", (m:Message) => {
+  setMessageHandler("MarketBuySellerMessage", (m: Message) => {
     val mCast = m.asInstanceOf[MarketBuySellerMessage]
 
     recalculate_inv_avg_cost(mCast.item, -mCast.units, mCast.price)

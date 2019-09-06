@@ -1,17 +1,23 @@
 package ecosim.example
 
 import ecosim.deep.IR
-import ecosim.deep.IR.TopLevel._
 import ecosim.deep.IR.Predef._
-import ecosim.deep.algo.AlgoInfo.EdgeInfo
-import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, DoWhile, Foreach, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
-import ecosim.deep.codegen.{ActorMerge, CreateActorGraphs, CreateCode, GraphMerge, Pipeline}
+import ecosim.deep.IR.TopLevel._
+import ecosim.deep.algo._
+import ecosim.deep.codegen._
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
-import ecosim.example.Market
-
-import scala.collection.mutable.ArrayBuffer
 
 object CodegenExample extends App {
+
+  val marketActorType = marketLifted()
+  val controlFlowTest = controlFlowTestLifted()
+  val farmerActorType = farmerLifted(marketActorType.methods.find(_.sym.asMethodSymbol.name.toString == "sell2").get)
+  val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType :: controlFlowTest :: Nil
+  val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
+    new ActorMerge(),
+    new GraphMerge(),
+    new CreateCode(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)"""),
+  ))
 
   def marketLifted(): ActorType[Market] = {
     val m: ClassWithObject[Market] = Market.reflect(IR)
@@ -132,7 +138,7 @@ object CodegenExample extends App {
           code"$p1F.argss(${Const(x._2)})(${Const(y._2)})"
         })
       })
-      IfThenElse(code"$p1F.methodId==${Const(a._2 + 1 +3)}", CallMethod[Any](a._2 + 1 +3, argss), b)
+      IfThenElse(code"$p1F.methodId==${Const(a._2 + 1 + 3)}", CallMethod[Any](a._2 + 1 + 3, argss), b)
     })
 
     val resultMessageCallF = Variable[Any]
@@ -197,18 +203,6 @@ object CodegenExample extends App {
 
     cF
   }
-
-  val marketActorType = marketLifted()
-  val controlFlowTest = controlFlowTestLifted()
-  val farmerActorType = farmerLifted(marketActorType.methods.find(_.sym.asMethodSymbol.name.toString == "sell2").get)
-
-  val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType  :: controlFlowTest :: Nil
-
-  val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
-    new ActorMerge(),
-    new GraphMerge(),
-    new CreateCode(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)"""),
-  ))
 
   pipeline.run()
 

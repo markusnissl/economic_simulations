@@ -1,13 +1,10 @@
 package ecosim.example
 
-import ecosim.example.Market
 import ecosim.classLifting.Lifter
 import ecosim.deep.IR
-import ecosim.deep.IR.Predef._
 import ecosim.deep.IR.TopLevel._
 import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline}
 import ecosim.deep.member.Actor
-import ecosim.example.CodegenExample.actorTypes
 
 object LifterCodegenExample extends App {
   val cls1: ClassWithObject[Market] = Market.reflect(IR)

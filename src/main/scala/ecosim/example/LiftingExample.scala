@@ -14,7 +14,7 @@ class MainClass {
     val b = new Actor2()
     val a = new Actor1()
     a.actor2 = b
-    List(b,a)
+    List(b, a)
   }
 }
 
@@ -23,31 +23,40 @@ class Actor2 extends Actor {
   def met2(par1: String) = {
     println(par1)
   }
-  def sell(number: Int, price: Int)(msg: String): NBUnit = {println(msg); NBUnit()}
+
   def main() = {
-    while (true){
-      sell(1,22)("i sell stuff")
+    while (true) {
+      sell(1, 22)("i sell stuff")
       SpecialInstructions.waitTurns()
       SpecialInstructions.handleMessages()
     }
+  }
+
+  def sell(number: Int, price: Int)(msg: String): NBUnit = {
+    println(msg); NBUnit()
   }
 }
 
 @lift
 class Actor1() extends Actor {
-  val a = List[Int](1,2,3)
-  val b = List[Int](2,3,4)
+  val a = List[Int](1, 2, 3)
+  val b = List[Int](2, 3, 4)
   var c = new Integer(10)
   var g = new String("string")
   var actor2: Actor2 = new Actor2()
+
   def main() = {
-    while(true) {
-      actor2.sell(1,22)("i buy stuff")
-      actor2.sell(1,22)("i buy sssss")
+    while (true) {
+      actor2.sell(1, 22)("i buy stuff")
+      actor2.sell(1, 22)("i buy sssss")
       SpecialInstructions.waitTurns()
     }
   }
-  def met3(): String = {actor2.met2("afk"); "afk"}
+
+  def met3(): String = {
+    actor2.met2("afk"); "afk"
+  }
+
   def met1(par1: Int, par2: Int)(par3: Int) = {
     println("whoa")
     3

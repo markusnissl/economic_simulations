@@ -1,8 +1,8 @@
 package ecosim.deep.codegen
 
+import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.{EdgeInfo, VarWrapper}
 import ecosim.deep.member.ActorType
-import ecosim.deep.IR.Predef._
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
@@ -14,6 +14,7 @@ case class Pipeline(convertElement: ConvertElement, stateMachineElements: List[S
     })
   }
 }
+
 abstract class PipelineElement() {}
 
 abstract class ConvertElement(actorTypes: List[ActorType[_]]) extends PipelineElement() {

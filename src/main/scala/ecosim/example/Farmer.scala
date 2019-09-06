@@ -6,13 +6,9 @@ import squid.quasi.lift
 
 @lift
 class Farmer() extends Actor {
-  var happiness: Int = 1:Int
+  var happiness: Int = 1: Int
   var peers: List[Farmer] = List[Farmer]()
-  var market: Market = null:Market
-
-  def tell(actor: Actor, h: Int): Unit = {
-    happiness = happiness - h
-  }
+  var market: Market = null: Market
 
   def notifyPeers(): Unit = {
     peers.foreach { p =>
@@ -20,8 +16,12 @@ class Farmer() extends Actor {
     }
   }
 
+  def tell(actor: Actor, h: Int): Unit = {
+    happiness = happiness - h
+  }
+
   def main() = {
-    while(true) {
+    while (true) {
       val testResult = market.sell2(500)
       println("TEST_VAR", testResult)
       waitTurns()

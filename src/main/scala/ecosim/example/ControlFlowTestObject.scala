@@ -11,7 +11,7 @@ class ControlFlowTestObject extends Actor {
   var y = 0
 
   def main(): Unit = {
-    while(true) {
+    while (true) {
       if (x < 0) {
         waitTurns()
       } else {

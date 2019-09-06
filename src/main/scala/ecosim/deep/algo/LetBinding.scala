@@ -1,6 +1,5 @@
 package ecosim.deep.algo
 
-import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.VarWrapper
 import squid.lib.MutVar
@@ -15,8 +14,7 @@ import squid.lib.MutVar
   * @tparam V type of the variable
   * @tparam A return value of Algo
   */
-case class LetBinding[V, A: CodeType, T:CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A], mutVar:Boolean = false, c: CodeType[T] = codeTypeOf[Unit])(implicit val V: CodeType[V]) extends Algo[A] {
-
+case class LetBinding[V, A: CodeType, T: CodeType](bound: Option[Variable[V]], value: Algo[V], rest: Algo[A], mutVar: Boolean = false, c: CodeType[T] = codeTypeOf[Unit])(implicit val V: CodeType[V]) extends Algo[A] {
 
 
   override def codegen: Unit = {

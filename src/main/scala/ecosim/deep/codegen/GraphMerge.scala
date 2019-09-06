@@ -1,7 +1,8 @@
 package ecosim.deep.codegen
 
-import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo}
 import ecosim.deep.IR.Predef._
+import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo}
+
 import scala.collection.mutable.ArrayBuffer
 
 class GraphMerge() extends StateMachineElement() {
@@ -11,7 +12,7 @@ class GraphMerge() extends StateMachineElement() {
       element.graph = optimizeCode(element.graph)
       element
     })
-    graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name+"_commandmerged"))
+    graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name + "_commandmerged"))
     graphs
   }
 
