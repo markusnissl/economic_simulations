@@ -188,7 +188,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
         //is not modified, so method inlining should be applied to all subgraphs. If there is a wait, then it should
         //be for all as well, so this makes no difference
         assert(amountM1 == 0 || amountM1 == edgeInfos.length)
-        
+
 
         //There are some edges, which require a stack value
         //At the moment, we can assume, that there are either all edges not needing a jump position or not
