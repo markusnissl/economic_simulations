@@ -9,9 +9,10 @@ object Simulation extends App {
   var actors: List[Actor] = List()
   var messages: List[Message] = List()
   var timer = 0
-  var until = 10
+  var until = 20
 
   def init(): Unit = {
+    println(InitData.initActors)
     actors = InitData.initActors
   }
 

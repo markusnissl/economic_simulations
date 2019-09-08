@@ -73,6 +73,7 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
     */
   private def createCode(algo: Algo[_], isMethod: Boolean, methodId: Int = -1): Unit = {
     AlgoInfo.isMethod = isMethod
+    AlgoInfo.methodId = methodId
 
     //Method body is empty
     if (algo.isInstanceOf[NoOp[_]]) {

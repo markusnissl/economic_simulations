@@ -4,8 +4,10 @@ import ecosim.deep.IR
 import IR.Predef._
 import IR.TopLevel._
 import IR.Predef.base.MethodApplication
-import ecosim.deep.algo.{Algo, CallMethod, Foreach, DoWhile, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
+import ecosim.deep.algo.{Algo, CallMethod, DoWhile, Foreach, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
 import ecosim.deep.member.{Actor, ActorType, LiftedMethod, RequestMessage, State}
+
+import scala.annotation.tailrec
 
 /** Code lifter
   *
@@ -22,7 +24,7 @@ class Lifter {
     */
   var methodsMap: Map[IR.MtdSymbol, MethodInfo[_]] = Map()
 
-  //TODO fix waitTurns and lift if the actortype is a stateless server (naming convention, ending with stateless)
+  //TODO add dowhile to codeLift
   /** Lifts the classes and object initialization
     *
     * @param startClasses - classes that need to be lifted, in form of [[Clasz]]
@@ -82,7 +84,8 @@ class Lifter {
         mainAlgo = CallMethod[Unit](methodsIdMap(method.symbol), List(List()))
       }
     }})
-    ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]])
+    val stateless = clasz.name.endsWith("stateless")
+    ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]], stateless)
   }
 
   /** Lifts the code for actor initialization
@@ -131,8 +134,8 @@ class Lifter {
       case code"if($cond: Boolean) $ifBody:T else $elseBody: T" =>
         val f = IfThenElse(cond, liftCode(ifBody, actorSelfVariable, clasz), liftCode(elseBody, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
-      case code"SpecialInstructions.waitTurns()" =>
-        val f = Wait()
+      case code"SpecialInstructions.waitTurns(${Const(turns: Int)})" =>
+        val f = liftWait(turns)
         f.asInstanceOf[Algo[T]]
       case code"SpecialInstructions.handleMessages()" =>
         //generates an IfThenElse for each of this class' methods, which checks if the called method id is the same
@@ -213,5 +216,19 @@ class Lifter {
   def liftCodeOther[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: Actor]): Option[Algo[T]] = {
     None
   }
+
+  //TODO discuss if its okay, since it takes a long time for a big number of turns
+  private def liftWait(turns: Int) = {
+    @tailrec
+    def liftWaitInner(turns: Int, runningAlgo: Algo[_ <: Unit]): Algo[_ <: Unit] = {
+      if (turns < 0) throw new Exception("waitTurns takes a positive integer as a parameter")
+      if (turns == 0)
+        runningAlgo
+      else
+        liftWaitInner(turns - 1, LetBinding(None, Wait(), runningAlgo))
+    }
+    liftWaitInner(turns - 1, Wait())
+  }
+
 }
 

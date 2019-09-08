@@ -8,30 +8,62 @@ import ecosim.classLifting.SpecialInstructions._
 import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline, SSO}
 import ecosim.deep.member.Actor
 
+
 @lift
-class ActorReceiver() extends Actor {
-  def metBlocking(): Int = 1312
-//  def metNonBlocking(i: Int): NBUnit = NBUnit()
-  def main() = {
-    while(true) {
-      handleMessages()
-      waitTurns()
+class ActorReceiverCubedstateless extends Actor {
+  def getValue() = 1345
+  def main(): Unit = {
+    while (true) {
+//      handleMessages()
+      getValue()
+      waitTurns(1)
     }
   }
 }
 
-//todo tell markus about not working local methods
+@lift
+class ActorReceiverSquaredstateless extends Actor {
+  def local2() = 131313
+  def getValue() = env3.getValue()
+  var env3 = new ActorReceiverCubedstateless()
+  def main(): Unit = {
+    while (true) {
+//      handleMessages()
+      getValue()
+      waitTurns(1)
+    }
+  }
+}
+
+
+@lift
+class ActorReceiverstateless() extends Actor {
+  def local() = 14444
+  def getValue() = env2.getValue()
+//  def getValue() = local()
+  def metBlocking(): Int = getValue()
+  var env2 = new ActorReceiverSquaredstateless()
+//  def metNonBlocking(i: Int): NBUnit = NBUnit()
+  def main() = {
+    while(true) {
+//      handleMessages()
+      getValue()
+      waitTurns(1)
+    }
+  }
+}
+
 
 @lift
 class ActorSender() extends Actor {
-  var env: ActorReceiver = new ActorReceiver()
-//  def local() = 11
+  var env: ActorReceiverstateless = new ActorReceiverstateless()
+  var a: Int = 1
   def main(): Unit = {
     while(true){
-      println("First command")
+      //todo test this
+      println("a")
       env.metBlocking()
-      println("next command")
-      waitTurns()
+      waitTurns(1)
     }
   }
 }
@@ -40,7 +72,7 @@ class ActorSender() extends Actor {
 class InitClass2() {
   def init() = {
     val a = new ActorSender()
-    List[Actor](a, a.env)
+    List[Actor](a, a.env, a.env.env2, a.env.env2.env3)
   }
 }
 
@@ -57,11 +89,13 @@ class InitClass2() {
 
 
 object SimpleSendExample extends App {
-  val cls1: ClassWithObject[ActorReceiver] = ActorReceiver.reflect(IR)
+  val cls1: ClassWithObject[ActorReceiverstateless] = ActorReceiverstateless.reflect(IR)
   val cls2: ClassWithObject[ActorSender] = ActorSender.reflect(IR)
   val cls3: ClassWithObject[InitClass2] = InitClass2.reflect(IR)
+  val cls4: ClassWithObject[ActorReceiverSquaredstateless] = ActorReceiverSquaredstateless.reflect(IR)
+  val cls5: ClassWithObject[ActorReceiverCubedstateless] = ActorReceiverCubedstateless.reflect(IR)
   val lifter = new Lifter()
-  val (actorTypes, initCode) = lifter(List(cls1, cls2), cls3)
+  val (actorTypes, initCode) = lifter(List(cls5, cls4, cls1, cls2), cls3)
 
   val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
     new SSO(),

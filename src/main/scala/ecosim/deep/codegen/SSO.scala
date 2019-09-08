@@ -12,22 +12,65 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 
 //plan for tomorrow:
-// 1. organize code better: everything goes into a function which is an obvious step
-// 2. make sure not to copy the same methods multiple times - that could fix the problem with blocking sends
-// 3. find out why the blocking send doesn't work
-// 4. probably final: the to do 2 in line 19
 // 5. probably final2: do it iteratively
+// 6. find out why the method calls are incorrect (e.g its written MethodCall(1) when copying the method with id 1 instead of new id)
 
-//TODO maybe when copying a method copy it into my ActorType to stay consistent
-//TODO when copying a method, check if it contains a call method. if it does, copy the called method too. watch out for recursion
+//TODO fix the dependancy to the first phase, through maps of methods and needed variables
+//TODO when copying a method copy it into my ActorType to stay consistent
+//TODO add 2 waits when sending a blocking message................
+//TODO substitute all actor references in code and cond of edgeinfo to this
 class SSO extends StateMachineElement() {
 
+  //TODO change the structure to something more clear. e.g. its hard to see here what the usage of these structurs will be
+  //map of all the changes made
+  var changes: Map[EdgeInfo, List[EdgeInfo]] = Map()
+  //for each copied method, saves the originalId -> newId, as to not copy the same method twice
+  var oldToNewMtdIds: Map[String, Map[Int,Int]] = Map()
+  var optimizationDone = false
+
   override def run(compiledActorGraphs: List[CompiledActorGraph]): List[CompiledActorGraph] = {
-    val graphs = compiledActorGraphs.map(element => {
-      optimizeElement(element, compiledActorGraphs.filter(otherElement => otherElement != element))
-    })
+    var graphs: List[CompiledActorGraph] = List()
+    while (!optimizationDone) {
+      optimizationDone = true
+      graphs = compiledActorGraphs.map(element => {
+        optimizeElement(element, compiledActorGraphs.filter(otherElement => otherElement != element))
+      })
+      println("bruh")
+    }
+    graphs.foreach(g => mtdToPosNodes(g.graph))
     graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name+" SSOmerged"))
     graphs
+  }
+
+  def mtdToPosNodes(graph: ArrayBuffer[EdgeInfo]) = {
+    graph.foreach(edge => {
+      edge.from match {
+        case c: CodeNodeMtd =>
+          val id = c.id
+          val methodGraph = graph.filter(edge1 => edge1.methodId1 == id)
+          if (!c.end) {
+            edge.from = CodeNodePos(methodGraph.head.from.asInstanceOf[CodeNodePos].pos)
+          }
+          //case of interest: jump from the end of the method
+          else {
+            edge.from = CodeNodePos(methodGraph.last.to.asInstanceOf[CodeNodePos].pos)
+          }
+        case _ =>
+      }
+      edge.to match {
+        case c: CodeNodeMtd =>
+          val id = c.id
+          val methodGraph = graph.filter(edge1 => edge1.methodId1 == id)
+          //case of interest: jump to the beginning of the method
+          if (!c.end) {
+            edge.to = CodeNodePos(methodGraph.head.from.asInstanceOf[CodeNodePos].pos)
+          }
+          else {
+            edge.to = CodeNodePos(methodGraph.last.to.asInstanceOf[CodeNodePos].pos)
+          }
+        case _ =>
+      }
+    })
   }
 
   def optimizeElement(element: CompiledActorGraph, rest: List[CompiledActorGraph]): CompiledActorGraph = {
@@ -69,72 +112,93 @@ class SSO extends StateMachineElement() {
       edges
     }
 
-    def mtdToPosNodes(graph: ArrayBuffer[EdgeInfo]) = {
-      graph.foreach(edge => {
-        edge.from match {
-          case c: CodeNodeMtd =>
-            val id = c.id
-            val methodGraph = graph.filter(edge1 => edge1.methodId1 == id)
-            if (!c.end) {
-              edge.from = CodeNodePos(methodGraph.head.from.asInstanceOf[CodeNodePos].pos)
-            }
-            //case of interest: jump from the end of the method
-            else {
-              edge.from = CodeNodePos(methodGraph.last.to.asInstanceOf[CodeNodePos].pos)
-            }
-          case _ =>
-        }
-        edge.to match {
-          case c: CodeNodeMtd =>
-            val id = c.id
-            val methodGraph = graph.filter(edge1 => edge1.methodId1 == id)
-            //case of interest: jump to the beginning of the method
-            if (!c.end) {
-              edge.to = CodeNodePos(methodGraph.head.from.asInstanceOf[CodeNodePos].pos)
-            }
-            else {
-              edge.to = CodeNodePos(methodGraph.last.to.asInstanceOf[CodeNodePos].pos)
-            }
-          case _ =>
-        }
-      })
-    }
-
     def copyMethod(element: CompiledActorGraph, neededElement: CompiledActorGraph, methodId: Int): Int = {
-      val newMethodId = simulation.Generator.getNextMethodId
-      element.variables = (element.variables ::: neededElement.variables).distinct
-      element.variables2 = (element.variables2 ::: neededElement.variables2).distinct
-      element.actorTypes = (element.actorTypes ::: neededElement.actorTypes).distinct
-      val methodToCopyGraph = neededElement.graph.filter(edge2 => edge2.methodId1 == methodId).map(edge2 => edge2.myCopy())
-      //TODO might need to fix this. ask markus if this will always be okay
-      val oldPos = methodToCopyGraph.head.from.asInstanceOf[CodeNodePos].pos
-      var newFreePos = element.freePosition
-      //moving the tos and froms to fit this graph
-      methodToCopyGraph.foreach(edge1 => {
-        edge1.methodId1 = newMethodId
-        edge1.from match {
-          case c: CodeNodePos =>
-            edge1.from = CodeNodePos(c.pos - oldPos + element.freePosition)
-          case _ =>
-        }
-        edge1.to match {
-          case c: CodeNodePos =>
-            edge1.to = CodeNodePos(c.pos - oldPos + element.freePosition)
-            newFreePos = edge1.to.asInstanceOf[CodeNodePos].pos + 1
-          case _ =>
-        }
-      })
-      element.freePosition = newFreePos
-      //add the new method to the graph
-      element.graph = element.graph ++ methodToCopyGraph
-      newMethodId
+      //first check if its already copied. if it is, just return the local method id
+      if (oldToNewMtdIds.getOrElse(element.name, Map[Int, Int]()).get(methodId).isDefined) {
+        oldToNewMtdIds(element.name)(methodId)
+      }
+      else {
+        val newMethodId = simulation.Generator.getNextMethodId
+        element.variables = (element.variables ::: neededElement.variables).distinct
+        element.variables2 = (element.variables2 ::: neededElement.variables2).distinct
+        neededElement.actorTypes.foreach(at => {
+          element.actorTypes.head.states = (element.actorTypes.head.states ::: at.states).distinct
+        })
+        val methodToCopyGraph = neededElement.graph.filter(edge2 => edge2.methodId1 == methodId).map(edge2 => edge2.myCopy())
+        //TODO might need to fix this. ask markus if this will always be okay (it the cast is safe)
+        val oldPos = methodToCopyGraph.head.from.asInstanceOf[CodeNodePos].pos
+        var newFreePos = element.freePosition
+        //moving the tos and froms to fit this graph
+        methodToCopyGraph.foreach(edge1 => {
+          edge1.methodId1 = newMethodId
+          edge1.from match {
+            case c: CodeNodePos =>
+              edge1.from = CodeNodePos(c.pos - oldPos + element.freePosition)
+            case _ =>
+          }
+          edge1.to match {
+            case c: CodeNodePos =>
+              edge1.to = CodeNodePos(c.pos - oldPos + element.freePosition)
+              newFreePos = edge1.to.asInstanceOf[CodeNodePos].pos + 1
+            case _ =>
+          }
+        })
+        element.freePosition = newFreePos
+        //add the new method to the graph
+        element.graph = element.graph ++ methodToCopyGraph
+        //have to add it here, because if its a recursive function this should work well
+        //TODO check if it works for recursive functions
+        oldToNewMtdIds = oldToNewMtdIds + (element.name -> (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()) + (methodId -> newMethodId)))
+
+        //after copying the graph check if it has a call method somewhere,
+        // if it does, that method has to be copied from the other actor as well
+        // and the edges calling the method need to be changed
+        methodToCopyGraph.foreach(edge1 => {
+          if (edge1.methodCallInfo != null) {
+            val calledMethodId = edge1.methodCallInfo.methodId
+            var copiedMethodId = -1
+            //if it was already copied, no need to do it again
+            if (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()).get(calledMethodId).isDefined) {
+              copiedMethodId = oldToNewMtdIds(element.name)(calledMethodId)
+            } else {
+              //TODO really debug this part
+//              val futureId = simulation.Generator.getNextMethodId
+//              simulation.Generator.revertNextMethodId
+//              edge1.label = edge1.label.replaceAll(calledMethodId.toString, futureId.toString)
+//              //TODO check if its okay to be any
+//              edge1.methodCallInfo = CallMethod[Any](futureId, edge1.methodCallInfo.argss)
+
+              copiedMethodId = copyMethod(element, neededElement, calledMethodId)
+              oldToNewMtdIds = oldToNewMtdIds + (element.name -> (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()) + (methodId -> newMethodId)))
+            }
+            edge1.label = edge1.label.replaceAll(calledMethodId.toString, copiedMethodId.toString)
+            //TODO check if its okay to be any
+            edge1.methodCallInfo = CallMethod[Any](copiedMethodId, edge1.methodCallInfo.argss)
+            //if this edge contains a CodeNodeMtd, its method id has to be changed
+            edge1.from match {
+              case c: CodeNodeMtd =>
+                edge1.from = c.copy(id = copiedMethodId)
+              case _ =>
+            }
+            edge1.to match {
+              case c: CodeNodeMtd =>
+                edge1.to = c.copy(id = copiedMethodId)
+              case _ =>
+            }
+          }
+        })
+        newMethodId
+      }
     }
 
     def createCallMethodNodes(newMethodId: Int, oldMethodId: Int, sendEdge: EdgeInfo, send: Send[_]): ArrayBuffer[EdgeInfo] = {
 
       AlgoInfo.resetData()
+      //TODO check if its okay to be any
       CallMethod[Any](newMethodId, send.argss).codegen
       val newEdges = AlgoInfo.stateGraph.map(edge1 => {
+        //since its replacing the sendEdge, these edges have to belong to the same method as that sendEdge
+        edge1.methodId1 = sendEdge.methodId1
         //move them to the right place
         edge1.from match {
           //TODO check if the cast can be safely done
@@ -173,66 +237,60 @@ class SSO extends StateMachineElement() {
       })
     }
 
-    //map of all the changes made
-    var changes: Map[EdgeInfo, List[EdgeInfo]] = Map()
-    //for each copied method, saves the originalId -> newId, as to not copy the same method twice
-    var oldToNewMtdIds: Map[Int,Int] = Map()
 
     element.graph.foreach(edge => {
       if (edge.sendInfo != null) {
-        //TODO check if the other element is stateless
         //TODO copy method and variables
         //steps:
         //1. find the actorType which has this method
         //2. in his graph find the part of it that is this method
         //3. append that part to this graph
         //3.1 translate all froms and tos so they fit this graph
-        //4. do variables....................
+        //4. do variables
         //5. prepare the callmethod part of the graph
         //5.1 set the from and to to this send
-        //5.2 rewrite the compile time code to runtime code ((((OOOR just copy it from the stateless server - a tad easier, a tad more restrictive)))) - try normal first
         val send = edge.sendInfo._1
         val methodId = send.methodId
-        val neededElement = (element :: rest).filter(element => element.actorTypes.exists(actorType => actorType.methods.exists(method => method.methodId == methodId))).headOption
+        val neededElement = (element :: rest).find(element => element.graph.exists(edge2 => edge2.methodId1 == methodId))
         if (neededElement.isEmpty) throw new Exception("Theres a message requesting a non existent method")
-        var newMethodId = -1
-        if (oldToNewMtdIds.get(methodId).isDefined) {
-          newMethodId = oldToNewMtdIds(methodId)
-        }
-        else {
-          newMethodId = copyMethod(element, neededElement.get, methodId)
-          oldToNewMtdIds = oldToNewMtdIds + (methodId -> newMethodId)
-        }
+        if (neededElement.get.actorTypes.forall(at => at.stateless)) {
+          optimizationDone = false //there will be some copying or changing done, so this might not be the last iteration
+          var newMethodId = -1
+          if (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()).get(methodId).isDefined) {
+            newMethodId = oldToNewMtdIds(element.name)(methodId)
+          }
+          else {
+            newMethodId = copyMethod(element, neededElement.get, methodId)
+          }
 
-        //special case - this send has already been replaced, these edges are left overs that need to be removed
-        if (send.blocking && !edge.sendInfo._2) {
-          changes = changes + (edge -> List())
-        }
-        else {
-          val newEdges = createCallMethodNodes(newMethodId, methodId, edge, send)
-          if (send.blocking) {
-            if (edge.sendInfo._2) {
+          //special case - this send has already been replaced, these edges are left overs that need to be removed
+          if (send.blocking && !edge.sendInfo._2) {
+            changes = changes + (edge -> List())
+          }
+          else {
+            val newEdges = createCallMethodNodes(newMethodId, methodId, edge, send)
+            if (send.blocking) {
+              if (edge.sendInfo._2) {
+                //TODO check if the cast can be safely done
+                val moveThreshold = newEdges.head.from.asInstanceOf[CodeNodePos].pos
+                val moveAmmount = -2
+                moveGraphPositions(moveAmmount, moveThreshold)
+                changes = changes + (edge -> newEdges.toList)
+              }
+            } else {
               //TODO check if the cast can be safely done
               val moveThreshold = newEdges.head.from.asInstanceOf[CodeNodePos].pos
-              val moveAmmount = -2
+              val moveAmmount = 1
               moveGraphPositions(moveAmmount, moveThreshold)
               changes = changes + (edge -> newEdges.toList)
             }
-          } else {
-            //TODO check if the cast can be safely done
-            val moveThreshold = newEdges.head.from.asInstanceOf[CodeNodePos].pos
-            val moveAmmount = 1
-            moveGraphPositions(moveAmmount, moveThreshold)
-            changes = changes + (edge -> newEdges.toList)
           }
         }
       }
     })
-
     changes.foreach(change => {
       element.graph = element.graph.flatMap(edge => if(edge == change._1) change._2 else List(edge))
     })
-    mtdToPosNodes(element.graph)
     element
   }
 

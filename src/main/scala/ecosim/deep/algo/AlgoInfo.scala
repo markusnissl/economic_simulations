@@ -143,8 +143,12 @@ object AlgoInfo {
     * @param code     actual code, which is executed when
     * @param waitEdge an information, that this edge is increasing the timer
     * @param isMethod is filled out automatically by using the isMethod vaiable of this class
+    * @param sendInfo if this edge is a send, keeps a reference to [[Send]] for relevant info, and also a
+    *                 boolean which is true if this is the first in sequence of edges representing the send
+    * @param methodId1 if the edge is part of method, keeps its id
     */
-  case class EdgeInfo(label: String,
+  //TODO change the structure so it contains any algo info instead of sendInfo, methodId, callMethodInfo, waitEdge and so on
+  case class EdgeInfo(var label: String,
                       var from: CodeNode,
                       var to: CodeNode,
                       var code: OpenCode[Unit],
@@ -153,10 +157,11 @@ object AlgoInfo {
                       cond: OpenCode[Boolean] = null,
                       var storePosRef: List[List[EdgeInfo]] = Nil,
                       var sendInfo: (Send[_], Boolean) = null,
-                      var methodId1: Int = methodId) {
+                      var methodId1: Int = methodId,
+                      var methodCallInfo: CallMethod[_] = null) {
 
     def myCopy(): EdgeInfo = {
-      EdgeInfo(label, from, to, code, waitEdge, isMethod, cond, storePosRef, sendInfo, methodId1)
+      EdgeInfo(label, from, to, code, waitEdge, isMethod, cond, storePosRef, sendInfo, methodId1, methodCallInfo)
     }
 
     def convertToPosOnly (methodLookupTable: Map[Int, Int], methodLookupTableEnd: Map[Int, Int]): Unit = {

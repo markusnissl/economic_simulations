@@ -35,6 +35,9 @@ package object simulation {
       lastMethodId = lastMethodId + 1
       tmp
     }
+    def revertNextMethodId: Unit = {
+      lastMethodId = lastMethodId - 1
+    }
 
   }
 
