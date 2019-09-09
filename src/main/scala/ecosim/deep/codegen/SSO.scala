@@ -170,7 +170,7 @@ class SSO extends StateMachineElement() {
           edge1.from match {
             case c: CodeNodePos =>
               edge1.from = CodeNodePos(c.pos - oldPos + element.freePosition)
-              newFreePos = edge1.to.asInstanceOf[CodeNodePos].pos + 1
+              newFreePos = edge1.from.asInstanceOf[CodeNodePos].pos + 1
             case _ =>
           }
           edge1.to match {

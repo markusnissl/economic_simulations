@@ -74,7 +74,7 @@ object LiftingExample extends App {
   val simulationData = lifter(startClasses, mainClass)
 
   val pipeline = Pipeline(new CreateActorGraphs(simulationData._1), List(
-//    new SSO(),
+    new SSO(),
     new GraphMerge(),
     new CreateCode(simulationData._2),
   ))
