@@ -2,22 +2,14 @@ package ecosim.deep.codegen
 
 import ecosim.deep.algo.AlgoInfo.{CodeNodeMtd, CodeNodePos, EdgeInfo}
 import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Send}
-import ecosim.deep.member.{Actor, ActorType, LiftedMethod}
 import ecosim.deep.IR.Predef._
 import ecosim.deep.codegen.CreateActorGraphs.{MutVarType, methodVariableTable, methodVariableTableStack}
-import javassist.CtNewMethod
-import squid.lib.MutVar
+import ecosim.deep.member.Actor
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-
-//plan for tomorrow:
-// 5. probably final2: do it iteratively
-// 6. find out why the method calls are incorrect (e.g its written MethodCall(1) when copying the method with id 1 instead of new id)
-
-//TODO fix the dependancy to the first phase, through maps of methods and needed variables
 //TODO when copying a method copy it into my ActorType to stay consistent
-//TODO add 2 waits when sending a blocking message................
+//TODO add 2 waits when sending a blocking message................ ask if its okay
 //TODO substitute all actor references in code and cond of edgeinfo to this
 class SSO extends StateMachineElement() {
 
@@ -35,10 +27,11 @@ class SSO extends StateMachineElement() {
       graphs = compiledActorGraphs.map(element => {
         optimizeElement(element, compiledActorGraphs.filter(otherElement => otherElement != element))
       })
-      println("bruh")
     }
     graphs.foreach(g => mtdToPosNodes(g.graph))
     graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name+" SSOmerged"))
+    //TODO ask if this is okay, or do i need to make a new position stack or something.
+    graphs.foreach(g => g.graph.foreach(edge => edge.positionStack = g.positionStack.head)) //FIXME put this in the method code somewhere. dont know why it wont work
     graphs
   }
 
@@ -129,8 +122,18 @@ class SSO extends StateMachineElement() {
         val oldPos = methodToCopyGraph.head.from.asInstanceOf[CodeNodePos].pos
         var newFreePos = element.freePosition
         //moving the tos and froms to fit this graph
+        // and fixing the method id and position stack
+        // and fixing the reference from another actor to self
         methodToCopyGraph.foreach(edge1 => {
           edge1.methodId1 = newMethodId
+          //TODO ask if this is correct...
+          neededElement.actorTypes.foreach( at => {
+            if (edge1.code != null)
+              edge1.code = at.self.asInstanceOf[Variable[Actor]].substitute(edge1.code.unsafe_asClosedCode, element.actorTypes.head.self.asInstanceOf[Variable[Actor]].toCode)
+            //TODO ask if this is even needed. if not, change .cond to val instead of var
+            if (edge1.cond != null)
+              edge1.cond = at.self.asInstanceOf[Variable[Actor]].substitute(edge1.cond.unsafe_asClosedCode, element.actorTypes.head.self.asInstanceOf[Variable[Actor]].toCode)
+          })
           edge1.from match {
             case c: CodeNodePos =>
               edge1.from = CodeNodePos(c.pos - oldPos + element.freePosition)
@@ -171,7 +174,7 @@ class SSO extends StateMachineElement() {
               copiedMethodId = copyMethod(element, neededElement, calledMethodId)
               oldToNewMtdIds = oldToNewMtdIds + (element.name -> (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()) + (methodId -> newMethodId)))
             }
-            edge1.label = edge1.label.replaceAll(calledMethodId.toString, copiedMethodId.toString)
+            edge1.label = edge1.label.replaceFirst(calledMethodId.toString, copiedMethodId.toString)
             //TODO check if its okay to be any
             edge1.methodCallInfo = CallMethod[Any](copiedMethodId, edge1.methodCallInfo.argss)
             //if this edge contains a CodeNodeMtd, its method id has to be changed
@@ -187,9 +190,31 @@ class SSO extends StateMachineElement() {
             }
           }
         })
+        //need to fix the restore positions of each method call
+        val copiedMethodCalls = methodToCopyGraph.groupBy(edge1 => edge1.methodCallInfo)
+        copiedMethodCalls.foreach(group => {
+          if (group._1 != null) {
+           setPosRef(group._2)
+          }
+        })
         newMethodId
       }
     }
+
+    //TODO ask markus if its okay
+    /*** given a list of call method edges, it will set them the right storePosRef
+      *  called after copying a callMethod from another graph
+      * @param callMethodEdges - list of call method edges, where each call method will have exactly 3 edges
+      *                        (otherwise it will not work). the second of the three edges has to be the pos ref
+      */
+    def setPosRef(callMethodEdges: ArrayBuffer[EdgeInfo]): Unit = {
+      val (currentMethodEdges, restMethodEdges) = callMethodEdges.splitAt(3)
+      currentMethodEdges.head.storePosRef = List(List(currentMethodEdges.tail.head))
+      if (restMethodEdges.nonEmpty) {
+        setPosRef(restMethodEdges)
+      }
+    }
+
 
     def createCallMethodNodes(newMethodId: Int, oldMethodId: Int, sendEdge: EdgeInfo, send: Send[_]): ArrayBuffer[EdgeInfo] = {
 
@@ -213,7 +238,6 @@ class SSO extends StateMachineElement() {
         edge1
       })
       AlgoInfo.resetData()
-//      newEdges.head.storePosRef = List(List(newEdges.tail.head))
       CreateActorGraphs.methodVariableTableStack(newMethodId) = CreateActorGraphs.methodVariableTableStack(oldMethodId)
       CreateActorGraphs.methodVariableTable(newMethodId) = CreateActorGraphs.methodVariableTable(oldMethodId)
       rewriteCallMethod(newEdges)
@@ -240,7 +264,6 @@ class SSO extends StateMachineElement() {
 
     element.graph.foreach(edge => {
       if (edge.sendInfo != null) {
-        //TODO copy method and variables
         //steps:
         //1. find the actorType which has this method
         //2. in his graph find the part of it that is this method
@@ -255,14 +278,7 @@ class SSO extends StateMachineElement() {
         if (neededElement.isEmpty) throw new Exception("Theres a message requesting a non existent method")
         if (neededElement.get.actorTypes.forall(at => at.stateless)) {
           optimizationDone = false //there will be some copying or changing done, so this might not be the last iteration
-          var newMethodId = -1
-          if (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()).get(methodId).isDefined) {
-            newMethodId = oldToNewMtdIds(element.name)(methodId)
-          }
-          else {
-            newMethodId = copyMethod(element, neededElement.get, methodId)
-          }
-
+          val newMethodId = copyMethod(element, neededElement.get, methodId)
           //special case - this send has already been replaced, these edges are left overs that need to be removed
           if (send.blocking && !edge.sendInfo._2) {
             changes = changes + (edge -> List())

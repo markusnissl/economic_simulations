@@ -1,8 +1,7 @@
 package ecosim.deep.algo
 
-import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
-import ecosim.deep.member.{Actor, RequestMessage, ResponseMessage}
+import ecosim.deep.member.Actor
 
 case class Send[R](actorFrom: OpenCode[Actor],
                    actorRef: OpenCode[Actor],
@@ -31,10 +30,10 @@ case class Send[R](actorFrom: OpenCode[Actor],
       code"""
                     val sender = ${actorFrom};
                     val receiver = ${actorRef};
-                    val requestMessage = RequestMessage(sender.id, receiver.id, ${methodIdC}, $convertedArgs);
+                    val requestMessage = ecosim.deep.member.RequestMessage(sender.id, receiver.id, ${methodIdC}, $convertedArgs);
                     sender.sendMessage(requestMessage);
                     sender.setMessageResponseHandler(requestMessage.sessionId, (response: ecosim.deep.member.Message) => {
-                      ${AlgoInfo.responseMessage} := response.asInstanceOf[ResponseMessage]
+                      ${AlgoInfo.responseMessage} := response.asInstanceOf[ecosim.deep.member.ResponseMessage]
                     })
                     ${AlgoInfo.returnValue} := null
                     ()
@@ -47,26 +46,26 @@ case class Send[R](actorFrom: OpenCode[Actor],
                        ${AlgoInfo.responseMessage} := null;
                        ()"""
 
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1, sendInfo = (this, true)))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f1", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), f1, sendInfo = (this, true)))
       AlgoInfo.nextPos
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f2",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f2, waitEdge = true, sendInfo = (this, false)))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f2", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), f2, waitEdge = true, sendInfo = (this, false)))
       AlgoInfo.nextPos
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f3, cond=code"(${AlgoInfo.responseMessage}!) != null", sendInfo = (this, false)))
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 no result",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter-1), f3, cond=code"(${AlgoInfo.responseMessage}!) == null", sendInfo = (this, false)))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 result", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), f3, cond=code"(${AlgoInfo.responseMessage}!) != null", sendInfo = (this, false)))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f3 no result", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter - 1), f3, cond=code"(${AlgoInfo.responseMessage}!) == null", sendInfo = (this, false)))
       AlgoInfo.nextPos
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f4",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f4, sendInfo = (this, false)))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send b f4" ,AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), f4, sendInfo = (this, false)))
       AlgoInfo.nextPos
     } else {
       val f1: OpenCode[Unit] =
         code"""
                     val sender = ${actorFrom};
                     val receiver = ${actorRef};
-                    val requestMessage = RequestMessage(sender.id, receiver.id, ${methodIdC}, $convertedArgs);
+                    val requestMessage = ecosim.deep.member.RequestMessage(sender.id, receiver.id, ${methodIdC}, $convertedArgs);
                     sender.sendMessage(requestMessage);
                     ${AlgoInfo.returnValue} := null
                     ()
               """
-      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send nb f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1, sendInfo = (this, true)))
+      AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Send nb f1",AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), f1, sendInfo = (this, true)))
       AlgoInfo.nextPos
     }
   }

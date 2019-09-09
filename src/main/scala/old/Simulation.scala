@@ -1,41 +1,34 @@
 package old
 
-import Markets._
-import Owner._
 import old.Commodities.Commodity
+import old.Markets._
+import old.Owner._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import simulation.{AgentId, ENVIRONMENT_ID, JobFireMessage, JobHiredMessage, MarketRequest, MarketResponse, Message}
+import simulation._
 
 
 class Simulation extends Serializable {
-  var timer = 0;
-
-  var market = collection.mutable.Map[Commodity, SellersMarket]();
-  for (c <- Commodities.all_commodities) {
-    market += (c -> new SellersMarket(c));
-  };
-
-  //var arbeitsmarkt = collection.mutable.Stack[SimO](); // all Persons
-  var arbeitsmarkt = collection.mutable.Stack[AgentId](); // all Persons
-
-  //var chicago = collection.mutable.Map[Security, OrderBook]();
-
-
-  /** TODO: We should have a registry of sims here, which can be looked up by
-    * id. This eliminates the need for substitution when copying a simulation,
-    * which is a mess.
-    */
-  @transient var sims = List[SimO]()
-
   /**
     * Spark part here
     */
   @transient lazy val conf: SparkConf = new SparkConf().setMaster("local").setAppName("ECONOMIC_SIMULATION")
   @transient lazy val sc: SparkContext = new SparkContext(conf)
+  for (c <- Commodities.all_commodities) {
+    market += (c -> new SellersMarket(c));
+  };
+  var timer = 0;
 
-  @transient var simsSpark:RDD[(AgentId, SimO)] = _
-
+  //var chicago = collection.mutable.Map[Security, OrderBook]();
+  var market = collection.mutable.Map[Commodity, SellersMarket]();
+  //var arbeitsmarkt = collection.mutable.Stack[SimO](); // all Persons
+  var arbeitsmarkt = collection.mutable.Stack[AgentId](); // all Persons
+  /** TODO: We should have a registry of sims here, which can be looked up by
+    * id. This eliminates the need for substitution when copying a simulation,
+    * which is a mess.
+    */
+  @transient var sims = List[SimO]()
+  @transient var simsSpark: RDD[(AgentId, SimO)] = _
 
 
   /** This is not a constructor since we first need to create the Simulation
@@ -71,10 +64,28 @@ class Simulation extends Serializable {
 
     if (GLOBAL.RUN_SPARK) {
       sc.setLogLevel("ERROR")
-      simsSpark = sc.parallelize(sims).union(sc.parallelize(market.values.toList)).map(x => (x.id,x))
+      simsSpark = sc.parallelize(sims).union(sc.parallelize(market.values.toList)).map(x => (x.id, x))
     }
 
     println("INIT Simulation complete " + this);
+  }
+
+  /** To be used to start a nested simulation. Callable from the sims.
+    * *
+    * Returns a mapping from the sims of the old simulation to those of the
+    * new.
+    */
+  @transient def run_sim(it: Int): collection.mutable.Map[SimO, SimO] = {
+    val (new_sim, old2new) = this.mycopy
+
+    // prevent recursive simulation. This is only safe it the simulation
+    // runs for fewer than 1000 iterations!
+    for (s <- new_sim.sims)
+      if (s.isInstanceOf[Factory])
+        s.asInstanceOf[Factory].prev_mgmt_action += 1000
+
+    new_sim.run(it);
+    old2new
   }
 
   /** TODO: Object ids (owners) in logs don't get substituted yet.
@@ -122,27 +133,9 @@ class Simulation extends Serializable {
     (s2, old2new)
   }
 
-  def handleEnvMessage(message: Message): List[Message] = message match {
-    case msg: MarketRequest => {
-      List[Message](MarketResponse(ENVIRONMENT_ID, msg.senderId, msg.item, market(msg.item).id))
-    }
-    case msg: JobHiredMessage => {
-      if (arbeitsmarkt.nonEmpty) {
-        List[Message](JobHiredMessage(ENVIRONMENT_ID, msg.senderId, arbeitsmarkt.pop()))
-      } else {
-        List[Message]()
-      }
-    }
-    case msg: JobFireMessage => {
-      arbeitsmarkt.push(msg.employeeId)
-      List[Message]()
-    }
-    case x => {
-      println("Illegal instruction: " + x.getClass.getSimpleName)
-      List[Message]()
-    }
+  @transient def run(steps: Int) {
+    run_until(timer + steps - 1);
   }
-
 
   /** run the simulation. Must init() first! */
   @transient def run_until(until: Int) {
@@ -153,16 +146,16 @@ class Simulation extends Serializable {
 
       if (GLOBAL.RUN_SPARK) {
         //          s.setReceiveMessages(mx.getOrElse(s.id, List()))
-        simsSpark = simsSpark.mapValues{ s =>
+        simsSpark = simsSpark.mapValues { s =>
           s.handleMessages()
           s.run_until(timer)._1.asInstanceOf[SimO]
         }.cache()
 
-        var dMessages:RDD[(AgentId, List[Message])] = simsSpark.flatMap(_._2.getMessages).map(x => (x.receiverId, x)).combineByKey(
+        var dMessages: RDD[(AgentId, List[Message])] = simsSpark.flatMap(_._2.getMessages).map(x => (x.receiverId, x)).combineByKey(
           (message: Message) => {
             List(message)
           },
-          (l: List[Message], message:Message) => {
+          (l: List[Message], message: Message) => {
             message :: l
           },
           (l1: List[Message], l2: List[Message]) => {
@@ -171,11 +164,11 @@ class Simulation extends Serializable {
         ).cache()
 
         // Environment answers immediatley for the next step
-        val envMessages:RDD[(AgentId, List[Message])] = dMessages.filter(_._1 == ENVIRONMENT_ID).flatMap(_._2).flatMap(handleEnvMessage).map( x => (x.receiverId, x)).combineByKey(
+        val envMessages: RDD[(AgentId, List[Message])] = dMessages.filter(_._1 == ENVIRONMENT_ID).flatMap(_._2).flatMap(handleEnvMessage).map(x => (x.receiverId, x)).combineByKey(
           (message: Message) => {
             List(message)
           },
-          (l: List[Message], message:Message) => {
+          (l: List[Message], message: Message) => {
             message :: l
           },
           (l1: List[Message], l2: List[Message]) => {
@@ -187,7 +180,7 @@ class Simulation extends Serializable {
         dMessages = dMessages.filter(_._1 != ENVIRONMENT_ID).union(envMessages).groupByKey().mapValues(_.flatten.toList)
         dMessages = dMessages.cache()
 
-        simsSpark = simsSpark.leftOuterJoin(dMessages).mapValues{x =>
+        simsSpark = simsSpark.leftOuterJoin(dMessages).mapValues { x =>
           x._1.setReceiveMessages(x._2.getOrElse(List()))
           x._1
         }.persist()
@@ -233,26 +226,25 @@ class Simulation extends Serializable {
     println("STOP Simulation " + this);
   }
 
-  @transient def run(steps: Int) {
-    run_until(timer + steps - 1);
-  }
-
-  /** To be used to start a nested simulation. Callable from the sims.
-    * *
-    * Returns a mapping from the sims of the old simulation to those of the
-    * new.
-    */
-  @transient def run_sim(it: Int): collection.mutable.Map[SimO, SimO] = {
-    val (new_sim, old2new) = this.mycopy
-
-    // prevent recursive simulation. This is only safe it the simulation
-    // runs for fewer than 1000 iterations!
-    for (s <- new_sim.sims)
-      if (s.isInstanceOf[Factory])
-        s.asInstanceOf[Factory].prev_mgmt_action += 1000
-
-    new_sim.run(it);
-    old2new
+  def handleEnvMessage(message: Message): List[Message] = message match {
+    case msg: MarketRequest => {
+      List[Message](MarketResponse(ENVIRONMENT_ID, msg.senderId, msg.item, market(msg.item).id))
+    }
+    case msg: JobHiredMessage => {
+      if (arbeitsmarkt.nonEmpty) {
+        List[Message](JobHiredMessage(ENVIRONMENT_ID, msg.senderId, arbeitsmarkt.pop()))
+      } else {
+        List[Message]()
+      }
+    }
+    case msg: JobFireMessage => {
+      arbeitsmarkt.push(msg.employeeId)
+      List[Message]()
+    }
+    case x => {
+      println("Illegal instruction: " + x.getClass.getSimpleName)
+      List[Message]()
+    }
   }
 }
 

@@ -1,10 +1,7 @@
 package ecosim.deep.algo
 
-import ecosim.deep.IR
 import ecosim.deep.IR.Predef._
 import squid.lib.MutVar
-
-import scala.collection.mutable.ListBuffer
 
 case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E], f: Algo[R])(implicit val E: CodeType[E]) extends Algo[Unit] {
   /**
@@ -26,7 +23,7 @@ case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E],
 
     val f1 = code"""$iterMut := $ls.iterator; ()"""
 
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f1", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter+1), f1))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f1", AlgoInfo.CodeNodePos(AlgoInfo.posCounter), AlgoInfo.CodeNodePos(AlgoInfo.posCounter + 1), f1))
     AlgoInfo.nextPos
     //Pos of f2 has to be saved before calling createCode of f3!!!
     val tmpPos = AlgoInfo.posCounter
@@ -34,8 +31,8 @@ case class Foreach[E, R: CodeType](ls: OpenCode[List[E]], variable: Variable[E],
 
     f.codegen
 
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 if",AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(tmpPos+1), code"$listValMut := $iter.next; ()", cond=code"$iter.hasNext"))
-    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 else",AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), code"()", cond=code"!($iter.hasNext)"))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 if", AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(tmpPos + 1), code"$listValMut := $iter.next; ()", cond = code"$iter.hasNext"))
+    AlgoInfo.stateGraph.append(AlgoInfo.EdgeInfo("Foreach f2 else", AlgoInfo.CodeNodePos(tmpPos), AlgoInfo.CodeNodePos(AlgoInfo.posCounter), code"()", cond = code"!($iter.hasNext)"))
 
     //TODO: var replacement
     //(List(f1, f2) ::: f3).map(x => x.subs(iter).~>(code"($iterMut!)")).map(x => x.subs(variable).~>(code"($listValMut!)"))

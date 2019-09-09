@@ -1,7 +1,8 @@
 package ecosim.deep.codegen
 
-import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo}
 import ecosim.deep.IR.Predef._
+import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo}
+
 import scala.collection.mutable.ArrayBuffer
 
 class GraphMerge() extends StateMachineElement() {
@@ -11,7 +12,7 @@ class GraphMerge() extends StateMachineElement() {
       element.graph = optimizeCode(element.graph)
       element
     })
-    graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name+"_commandmerged"))
+    graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name + "_commandmerged"))
     graphs
   }
 
@@ -44,6 +45,7 @@ class GraphMerge() extends StateMachineElement() {
       * This means, that code can be merged between 3 nodes if following is fullfilled:
       * Node 2: Has exactly one outgoing and one incoming edge and the incoming edge is not a wait and the outgoing edge has no condition
       * Extra: I am not allowed to merge with the next code, if a cycle is created
+      * Extra: I am only allowed to merge the code, if the state is the same, otherwise I have to reset state (check with state and stack)
       */
     // TODO Extra: I am not allowed to merge with the next code, if a cycle is created (since wait required somewhere currently skipped)
 
@@ -52,7 +54,9 @@ class GraphMerge() extends StateMachineElement() {
     while (counter < m.length) {
       if (incoming(counter) == 1 && outgoing(counter) == 1) {
         if (!groupedGraphEnd(counter)(0).waitEdge && groupedGraphStart(counter)(0).cond == null) {
-          mergeList = MergeInfo(groupedGraphEnd(counter)(0).from.getNativeId, counter, groupedGraphStart(counter)(0).to.getNativeId) :: mergeList
+          if (groupedGraphEnd(counter)(0).edgeState == groupedGraphStart(counter)(0).edgeState && groupedGraphEnd(counter)(0).positionStack == groupedGraphStart(counter)(0).positionStack) {
+            mergeList = MergeInfo(groupedGraphEnd(counter)(0).from.getNativeId, counter, groupedGraphStart(counter)(0).to.getNativeId) :: mergeList
+          }
         }
       }
       counter += 1
@@ -83,8 +87,8 @@ class GraphMerge() extends StateMachineElement() {
       // Create a new edgeInfo
       val firstEdge: EdgeInfo = groupedGraphStart(entry.startNode).find(_.to.getNativeId == entry.middleNode).get
       val secondEdge: EdgeInfo = groupedGraphStart(entry.middleNode)(0)
-      val newNode: EdgeInfo = EdgeInfo(firstEdge.label + ", " + secondEdge.label, firstEdge.from, secondEdge.to, code"${firstEdge.code}; ${secondEdge.code}", secondEdge.waitEdge, false, firstEdge.cond, firstEdge.storePosRef ::: secondEdge.storePosRef)
-
+      val newNode: EdgeInfo = EdgeInfo(firstEdge.label + ", " + secondEdge.label, firstEdge.from, secondEdge.to, code"${firstEdge.code}; ${secondEdge.code}", secondEdge.waitEdge, false, firstEdge.cond, firstEdge.storePosRef ::: secondEdge.storePosRef, firstEdge.edgeState, -1, firstEdge.positionStack)
+      assert(firstEdge.edgeState == secondEdge.edgeState)
       assert(secondEdge.to.getNativeId == entry.endNode)
       // Remove old edgeInfo and inserted new created ones
       groupedGraphStart(entry.startNode).remove(groupedGraphStart(entry.startNode).indexOf(firstEdge))

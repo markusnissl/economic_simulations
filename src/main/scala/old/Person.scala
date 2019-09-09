@@ -10,45 +10,25 @@ class Person(
               var log: List[String] = List()
             ) extends SimO {
 
+  val referencePerson: ReferencePerson = new ReferencePerson(this, this.id + 1)
+  private val properties: Map[Commodity, Map[String, Int]] =
+    Map(Commodities.Flour -> Map("calories" -> 100),
+      Commodities.Burger -> Map("calories" -> 500))
+
+  private val foodstuffs = List(Commodities.Flour, Commodities.Burger)
+  var initC = false
+  var refName: String = _
+
   override def mycopy(): Person = {
     val p = new Person(active, happiness, log)
     copy_state_to(p)
     p
   }
 
-  private val properties: Map[Commodity, Map[String, Int]] =
-    Map(Commodities.Flour -> Map("calories" -> 100),
-      Commodities.Burger -> Map("calories" -> 500))
-
-  private val foodstuffs = List(Commodities.Flour, Commodities.Burger)
-
-  // TODO: factor in bounded rationality: far-off rewards are to be discounted
-  private def expected_enjoyment(item: Commodity): Int = {
-    item match {
-      case Commodities.MovieTicket => 1
-      case _ if properties(item).contains("calories") =>
-        properties(item)("calories")
-      case _ => 0
-    }
-  }
-
-  private def consume(consumable: Commodity, units: Int) {
-    assert(available(consumable) >= units)
-    happiness += units * expected_enjoyment(consumable)
-    destroy(consumable, units)
-    log = (units + "*" + consumable + "@" + current_time) :: log
-  }
-
   def getName: String = id.toString
 
-  var initC = false
-
-  val referencePerson:ReferencePerson = new ReferencePerson(this, this.id+1)
-  var refName:String = _
-
-  //Demo function we want to call as proxy
-  private def sell(arg1: Int, arg2:Int): (Boolean,Boolean) = {
-    (true,false)
+  override def stat {
+    print("(Person@" + happiness + " " + capital / 100 + ")  ")
   }
 
   protected def algo = __forever(
@@ -94,23 +74,41 @@ class Person(
     __wait(1)
   )
 
-  override def stat {
-    print("(Person@" + happiness + " " + capital / 100 + ")  ")
+  private def consume(consumable: Commodity, units: Int) {
+    assert(available(consumable) >= units)
+    happiness += units * expected_enjoyment(consumable)
+    destroy(consumable, units)
+    log = (units + "*" + consumable + "@" + current_time) :: log
+  }
+
+  // TODO: factor in bounded rationality: far-off rewards are to be discounted
+  private def expected_enjoyment(item: Commodity): Int = {
+    item match {
+      case Commodities.MovieTicket => 1
+      case _ if properties(item).contains("calories") =>
+        properties(item)("calories")
+      case _ => 0
+    }
+  }
+
+  //Demo function we want to call as proxy
+  private def sell(arg1: Int, arg2: Int): (Boolean, Boolean) = {
+    (true, false)
   }
 
   setMessageHandler("PersonNameRequest", (message: Message) => {
-    val mCast:PersonNameRequest = message.asInstanceOf[PersonNameRequest]
+    val mCast: PersonNameRequest = message.asInstanceOf[PersonNameRequest]
     sendMessage(new PersonNameResponse(mCast, this.getName))
   })
 
   setMessageHandler("PersonSellRequest", (message: Message) => {
-    val mCast:PersonSellRequest = message.asInstanceOf[PersonSellRequest]
+    val mCast: PersonSellRequest = message.asInstanceOf[PersonSellRequest]
     sendMessage(new PersonSellResponse(mCast))
   })
 
 
   setMessageHandler("RequestMessage", (message: Message) => {
-    val mCast:RequestMessage = message.asInstanceOf[RequestMessage]
+    val mCast: RequestMessage = message.asInstanceOf[RequestMessage]
 
     val result = mCast.call_f(this)
     //this.sell(mCast.params.tail.head, mCast.params.tail.tail.head)

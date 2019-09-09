@@ -14,7 +14,7 @@ class ActorReceiverCubedstateless extends Actor {
   def getValue() = 1345
   def main(): Unit = {
     while (true) {
-//      handleMessages()
+      handleMessages()
       getValue()
       waitTurns(1)
     }
@@ -28,7 +28,7 @@ class ActorReceiverSquaredstateless extends Actor {
   var env3 = new ActorReceiverCubedstateless()
   def main(): Unit = {
     while (true) {
-//      handleMessages()
+      handleMessages()
       getValue()
       waitTurns(1)
     }
@@ -46,8 +46,7 @@ class ActorReceiverstateless() extends Actor {
 //  def metNonBlocking(i: Int): NBUnit = NBUnit()
   def main() = {
     while(true) {
-//      handleMessages()
-      getValue()
+      handleMessages()
       waitTurns(1)
     }
   }
@@ -60,8 +59,9 @@ class ActorSender() extends Actor {
   var a: Int = 1
   def main(): Unit = {
     while(true){
-      //todo test this
-      println("a")
+      //TODO this still doesnt work
+//      println(env.metBlocking())
+      println(a)
       env.metBlocking()
       waitTurns(1)
     }
@@ -73,6 +73,7 @@ class InitClass2() {
   def init() = {
     val a = new ActorSender()
     List[Actor](a, a.env, a.env.env2, a.env.env2.env3)
+//    List[Actor](a, a.env)
   }
 }
 
@@ -95,8 +96,7 @@ object SimpleSendExample extends App {
   val cls4: ClassWithObject[ActorReceiverSquaredstateless] = ActorReceiverSquaredstateless.reflect(IR)
   val cls5: ClassWithObject[ActorReceiverCubedstateless] = ActorReceiverCubedstateless.reflect(IR)
   val lifter = new Lifter()
-  val (actorTypes, initCode) = lifter(List(cls5, cls4, cls1, cls2), cls3)
-
+  val (actorTypes, initCode) = lifter(List(cls2, cls1, cls4, cls5), cls3)
   val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
     new SSO(),
     new GraphMerge(),

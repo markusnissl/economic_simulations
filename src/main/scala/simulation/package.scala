@@ -13,6 +13,7 @@ package object simulation {
 
     /**
       * Generates a new id for an agent and returns it
+      *
       * @return id for an agent
       */
     def getNextAgentId: AgentId = {
@@ -22,6 +23,7 @@ package object simulation {
 
     /**
       * Generates a new id for an object and returns it
+      *
       * @return id for an object, e.g., product or bank account
       */
     def getNextObjectId: ObjectId = {

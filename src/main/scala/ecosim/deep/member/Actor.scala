@@ -42,6 +42,8 @@ case class ResponseMessage(override val senderId: Actor.AgentId, override val re
 
 class Actor {
   var id = Actor.getNextAgentId
+  var timer: Int = 0
+  var current_pos: Int = 0
   /**
     * Contains the received messages from the previous step
     */
@@ -49,16 +51,14 @@ class Actor {
   protected var sendMessages: List[Message] = List()
   protected var responseListeners: collection.mutable.Map[String, Message => Unit] = collection.mutable.Map()
 
-  def stepFunction: (Int, Int) = (current_pos, timer+1)
-
   /**
     * Adds a list of messages to the agent
     *
     * @param messages Actions with receiver matching the agent from the previous step
     */
   final def addReceiveMessages(messages: List[Message]): Actor = {
-    this.receivedMessages = this.receivedMessages ::: messages.filter(x => responseListeners.get(x.sessionId).isEmpty)
-    messages.filter(x => responseListeners.get(x.sessionId).isDefined)
+    this.receivedMessages = this.receivedMessages ::: messages.filter(x => x.isInstanceOf[RequestMessage] || responseListeners.get(x.sessionId).isEmpty)
+    messages.filter(x => responseListeners.get(x.sessionId).isDefined && x.isInstanceOf[ResponseMessage])
       .foreach(x => {
         val handler = responseListeners(x.sessionId)
         responseListeners.remove(x.sessionId)
@@ -73,7 +73,11 @@ class Actor {
     * @param message Action, which should be sent to a different Agent
     */
   final def sendMessage(message: Message): Unit = {
-    sendMessages = message :: sendMessages
+    if (message.receiverId == this.id) {
+      addReceiveMessages(List(message))
+    } else {
+      sendMessages = message :: sendMessages
+    }
   }
 
   final def getSendMessages: List[Message] = {
@@ -107,9 +111,6 @@ class Actor {
     rM
   }
 
-  var timer: Int = 0
-  var current_pos: Int = 0
-
   def run_until(until: Int): Actor = {
     while (timer <= until) {
       println(this.getClass.getSimpleName, timer, until, current_pos)
@@ -119,4 +120,6 @@ class Actor {
     }
     this
   }
+
+  def stepFunction: (Int, Int) = (current_pos, timer + 1)
 }

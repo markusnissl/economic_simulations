@@ -1,17 +1,24 @@
 package ecosim.example
 
 import ecosim.deep.IR
-import ecosim.deep.IR.TopLevel._
 import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.EdgeInfo
-import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, DoWhile, Foreach, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
-import ecosim.deep.codegen.{CreateActorGraphs, CreateCode, GraphMerge, Pipeline, SSO}
+import ecosim.deep.IR.TopLevel._
+import ecosim.deep.algo._
+import ecosim.deep.codegen._
 import ecosim.deep.member.{ActorType, LiftedMethod, RequestMessage, State}
-import ecosim.example.Market
-
-import scala.collection.mutable.ArrayBuffer
 
 object CodegenExample extends App {
+
+  val marketActorType = marketLifted()
+  val controlFlowTest = controlFlowTestLifted()
+  val farmerActorType = farmerLifted(marketActorType.methods.find(_.sym.asMethodSymbol.name.toString == "sell2").get)
+  val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType :: controlFlowTest :: Nil
+  val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
+    new ActorMerge(),
+    new GraphMerge(),
+    new CreateCode(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)"""),
+  ))
 
   def marketLifted(): ActorType[Market] = {
     val m: ClassWithObject[Market] = Market.reflect(IR)
@@ -32,7 +39,7 @@ object CodegenExample extends App {
     val recursiveFunction = new LiftedMethod[Unit](m, LetBinding(
       None,
       IfThenElse(code"${rFParam1}.asInstanceOf[List[Int]].tail.isEmpty == false", CallMethod[Unit](3, List(List(code"${rFParam1}.asInstanceOf[List[Int]].tail"))), NoOp[Unit]()),
-      ScalaCode(code"""println(${rFParam1}.asInstanceOf[List[Int]].head);""")
+      ScalaCode(code"""println(${rFParam1}.asInstanceOf[List[Int]].head);"""),
     ), false, 3) {
       override val mtd: cls.Method[Unit, cls.Scp] = rF.asInstanceOf[this.cls.Method[Unit, cls.Scp]]
     }
@@ -122,25 +129,51 @@ object CodegenExample extends App {
       override val mtd: cls.Method[Unit, cls.Scp] = nP.asInstanceOf[this.cls.Method[Unit, cls.Scp]]
     }
 
+    val farmerFunctions = tell :: nofifyPeers :: Nil
+    val p1F = Variable[RequestMessage]
+
+    val algo: Algo[Any] = NoOp()
+    val callCode = farmerFunctions.zipWithIndex.foldRight(algo)((a, b) => {
+      val argss: List[List[OpenCode[_]]] = a._1.mtd.vparams.zipWithIndex.map(x => {
+        x._1.zipWithIndex.map(y => {
+          code"$p1F.argss(${Const(x._2)})(${Const(y._2)})"
+        })
+      })
+      IfThenElse(code"$p1F.methodId==${Const(a._2 + 1 + 3)}", CallMethod[Any](a._2 + 1 + 3, argss), b)
+    })
+
+    val resultMessageCallF = Variable[Any]
+
+    val handleMessage = Foreach(
+      code"$farmerSelf.popRequestMessages",
+      p1F, LetBinding(
+        Option(resultMessageCallF),
+        callCode,
+        ScalaCode(code"""$p1F.reply($farmerSelf, $resultMessageCallF)""")
+      )
+    )
+
 
     val farmer = ActorType[Farmer]("Farmer",
       State[Market](IR.methodSymbol[Farmer]("market"), codeTypeOf[Market], nullValue[Market].asOpenCode) ::
         State[Int](IR.methodSymbol[Farmer]("happiness"), codeTypeOf[Int], code"0") ::
         State[List[Farmer]](IR.methodSymbol[Farmer]("peers"), codeTypeOf[List[Farmer]], code"Nil") :: Nil,
-      tell :: nofifyPeers :: Nil,
+      farmerFunctions,
       DoWhile(code"true",
-        LetBinding(None,
-          LetBinding[Int, Unit](Option(testResult),
-            Send[Int](
-              code"$farmerSelf",
-              code"$farmerSelf.market",
-              marketSellB.methodId,
-              List(List(code"500")),
-              true
+        LetBinding(None, handleMessage,
+          LetBinding(None,
+            LetBinding(Option(testResult),
+              Send[Int](
+                code"$farmerSelf",
+                code"$farmerSelf.market",
+                marketSellB.methodId,
+                List(List(code"500")),
+                true
+              ),
+              ScalaCode(code"""println("TEST_VAR",$testResult)""")
             ),
-            ScalaCode(code"""println("TEST_VAR",$testResult)""")
-          ),
-          Wait()
+            Wait()
+          )
         )
       )
       ,
@@ -156,7 +189,7 @@ object CodegenExample extends App {
 
     val cF = ActorType[ControlFlowTestObject]("ControlFlowTestObject",
       State[Int](IR.methodSymbol[ControlFlowTestObject]("x"), codeTypeOf[Int], code"0") ::
-      State[Int](IR.methodSymbol[ControlFlowTestObject]("y"), codeTypeOf[Int], code"0") ::
+        State[Int](IR.methodSymbol[ControlFlowTestObject]("y"), codeTypeOf[Int], code"0") ::
         Nil,
       Nil,
       DoWhile(code"true",
@@ -171,18 +204,6 @@ object CodegenExample extends App {
 
     cF
   }
-
-  val marketActorType = marketLifted()
-  val controlFlowTest = controlFlowTestLifted()
-  val farmerActorType = farmerLifted(marketActorType.methods.find(_.sym.asMethodSymbol.name.toString == "sell2").get)
-
-  val actorTypes: List[ActorType[_]] = marketActorType :: farmerActorType :: controlFlowTest :: Nil
-
-  val pipeline = Pipeline(new CreateActorGraphs(actorTypes), List(
-    new SSO(),
-    new GraphMerge(),
-    new CreateCode(code"""val m = new Market; val f = new Farmer(); f.market = m; List(m, f)"""),
-  ))
 
   pipeline.run()
 

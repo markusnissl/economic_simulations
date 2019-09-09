@@ -1,10 +1,9 @@
 package old
 
-import Owner._
-import code._
 import old.Commodities.Commodity
-import simulation.{JobFireMessage, JobHireMessage, JobHiredMessage, MarketBuyMessage, MarketRequest, MarketSellMessage, Message, ReferencePerson, ResponseMarketData}
-import timeseries.TimeseriesC
+import old.Owner._
+import old.timeseries.TimeseriesC
+import simulation._
 
 
 case class ProductionLineSpec(employees_needed: Int,
@@ -118,7 +117,11 @@ case class HR(private val o: Owner,
     for (a <- employees) o.transfer_money_to(a.id, salary)
   }
 
-  def salary_cost():Int = salary * employees.length
+  def salary_cost(): Int = salary * employees.length
+
+  def hire(n: Int) {
+    for (i <- 1 to n) hire_one()
+  }
 
   protected def hire_one() {
     o.sendMessage(JobHireMessage(o.id, _root_.simulation.ENVIRONMENT_ID))
@@ -126,17 +129,13 @@ case class HR(private val o: Owner,
       employees.push(shared.arbeitsmarkt.pop.asInstanceOf[Person]);*/
   }
 
+  def fire(n: Int) {
+    for (i <- 1 to n) fire_one()
+  }
+
   protected def fire_one() {
     o.sendMessage(JobFireMessage(o.id, _root_.simulation.ENVIRONMENT_ID, employees.pop.id))
     //shared.arbeitsmarkt.push(employees.pop);
-  }
-
-  def hire(n: Int) {
-    for (i <- 1 to n) hire_one()
-  }
-
-  def fire(n: Int) {
-    for (i <- 1 to n) fire_one()
   }
 }
 
@@ -144,10 +143,10 @@ case class HR(private val o: Owner,
 class Factory(pls: ProductionLineSpec) extends SimO() {
 
   var pl: List[ProductionLine] = List()
-  private var zombie_cost2: Double = 0.0 // cost from canceled prod. runs
   var prev_mgmt_action: Int = 0
-  protected var hr: HR = HR(this)
-  protected var goal_num_pl = 0
+  var newEmployees = 0
+  var marketData: TimeseriesC[List[SalesRecord]] = null
+  var historyFetched = false
 
   // constructor
   {
@@ -158,6 +157,16 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
   /*protected def copy_state_to(_to: Factory) {
     assert(false)
   } // don't call*/
+  var initC = true
+  protected var hr: HR = HR(this)
+  protected var goal_num_pl = 0
+  private var zombie_cost2: Double = 0.0 // cost from canceled prod. runs
+
+  override def mycopy(): Factory = {
+    val f = new Factory(pls)
+    copy_state_to(f)
+    f
+  }
 
   protected def copy_state_to(_to: Factory) {
 
@@ -173,52 +182,99 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
     _to.goal_num_pl = goal_num_pl
   }
 
-  override def mycopy(): Factory = {
-    val f = new Factory(pls)
-    copy_state_to(f)
-    f
+  override def stat {
+    val zombie_cost = pl.map(_.lost_runs_cost).sum.toInt
+
+    println((
+      (assets + goodwill + liabilities) / 100,
+      ((assets + goodwill) / 100, (assets / 100, goodwill / 100),
+        liabilities / 100),
+      zombie_cost.toInt / 100,
+      zombie_cost2.toInt / 100,
+      inventory_to_string(),
+      pl.length
+    ))
   }
 
+  protected def goodwill: Int = pl.map(_.goodwill).sum.toInt
 
-  /** Returns whether everything was sucessfully bought. */
-  protected def bulk_buy_missing(_l: List[(Commodity, Int)],
-                                 multiplier: Int): Boolean = {
-    val l = _l.map(t => {
-      // DANGER: if we have shorted his position, this amount is
-      // not sufficient.
-      val amount = math.max(0, t._2 * multiplier - available(t._1))
-      (t._1, amount)
-    });
+  // This is the cost-based price of product on stock
+  override def price(dummy: Commodity): Option[Double] = {
+    if (available(pls.produced._1) > 0)
+      Some(1.0 * inventory_avg_cost.getOrElse(pls.produced._1, 0.0))
+    else None
+  }
 
-    /*def successfully_bought(line: (Commodity, Int)) =
-      (shared.market(line._1).
-        market_buy_order_now(shared.timer, this, line._2) == 0);*/
-    // nothing missing
-
-    // TODO: fix me: this logic is not equivalent anymore
-    def successfully_bought(line: (Commodity, Int)):Boolean = {
-      if (line._2 <= 0) {
-        true
-      } else {
-        val mId = markets.get(line._1)
-        if (mId.isDefined) {
-          sendMessage(MarketBuyMessage(this.id, mId.get, line._1, line._2))
-        }
-        false
-      }
+  override def run_until(until: Int): (Sim, Option[Int]) = {
+    // this ordering is important, so that bulk buying
+    // happens before consumption.
+    val nxt1 = super.run_until(until)._2.get
+    if (pl.nonEmpty) {
+      val nxt2 = pl.map(_.run_until(until)._2.get).min
+      (this, Some(math.min(nxt1, nxt2))) // compute a meaningful next time
+    } else {
+      (this, Some(nxt1))
     }
-
-    l.forall(successfully_bought)
   }
 
-  var newEmployees = 0
+  override protected def algo = __forever(
+    __if(initC)(
+      __do {
+        // Get market ids from environment
+        for (x <- pls.required) {
+          sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, x._1))
+        }
+        for (x <- pls.consumed) {
+          sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, x._1))
+        }
+        sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, pls.produced._1))
+        initC = false
+      }
+    ),
+    __do {
+
+      val mgmt_step_size = 6;
+
+      if (prev_mgmt_action + mgmt_step_size < current_time)
+      //if(shared.timer % mgmt_step_size == mgmt_step_size - 1)
+      {
+        prev_mgmt_action = current_time; // call before tactics to avoid
+        // immediate recursion in nested simulation.
+        tactics1();
+      }
+
+      if (historyFetched) {
+        tactics() // changes goal_num_pl
+      }
+
+      for (i <- (pl.length + 1) to goal_num_pl)
+        add_production_line();
+      for (i <- (goal_num_pl + 1) to pl.length)
+        remove_production_line();
+
+      // TODO: buy more to get better prices?
+      //println("Factory.algo: this=" + this);
+      val still_missing = bulk_buy_missing(pls.consumed, pl.length);
+    },
+    __wait(1),
+    __do {
+      //assert(hr.employees.length == pl.length * pls.employees_needed);
+      hr.pay_workers();
+    }
+  )
+
+  setMessageHandler("ResponseMarketData", (m: Message) => {
+    val mCast = m.asInstanceOf[ResponseMarketData]
+    marketData = mCast.timeseries
+    historyFetched = true
+  })
 
   protected def add_production_line(): Boolean = {
     var success = true;
 
     // TODO: fix me: this logic is not equivalent anymore
     //if (shared.arbeitsmarkt.length >= pls.employees_needed) {
-    if(true) {
+    if (true) {
       // buy only what we require. We may still have it from
       // previous production reductions.
       success = bulk_buy_missing(pls.required, pl.length + 1)
@@ -238,6 +294,37 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
     success
   }
 
+  /** Returns whether everything was sucessfully bought. */
+  protected def bulk_buy_missing(_l: List[(Commodity, Int)],
+                                 multiplier: Int): Boolean = {
+    val l = _l.map(t => {
+      // DANGER: if we have shorted his position, this amount is
+      // not sufficient.
+      val amount = math.max(0, t._2 * multiplier - available(t._1))
+      (t._1, amount)
+    });
+
+    /*def successfully_bought(line: (Commodity, Int)) =
+      (shared.market(line._1).
+        market_buy_order_now(shared.timer, this, line._2) == 0);*/
+    // nothing missing
+
+    // TODO: fix me: this logic is not equivalent anymore
+    def successfully_bought(line: (Commodity, Int)): Boolean = {
+      if (line._2 <= 0) {
+        true
+      } else {
+        val mId = markets.get(line._1)
+        if (mId.isDefined) {
+          sendMessage(MarketBuyMessage(this.id, mId.get, line._1, line._2))
+        }
+        false
+      }
+    }
+
+    l.forall(successfully_bought)
+  }
+
   // We don't sell required items (land, etc.) but only fire people.
   protected def remove_production_line() {
     if (pl.nonEmpty) {
@@ -247,35 +334,10 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
     }
   }
 
-  protected def goodwill: Int = pl.map(_.goodwill).sum.toInt
-
-  override def stat {
-    val zombie_cost = pl.map(_.lost_runs_cost).sum.toInt
-
-    println((
-      (assets + goodwill + liabilities) / 100,
-      ((assets + goodwill) / 100, (assets / 100, goodwill / 100),
-        liabilities / 100),
-      zombie_cost.toInt / 100,
-      zombie_cost2.toInt / 100,
-      inventory_to_string(),
-      pl.length
-    ))
-  }
-
   protected def tactics1(): Unit = {
     //Request market data
     //shared.market(pls.produced._1).order_history.toTimeseries
   }
-
-  var marketData: TimeseriesC[List[SalesRecord]] = null
-  var historyFetched = false
-
-  setMessageHandler("ResponseMarketData", (m:Message) => {
-    val mCast = m.asInstanceOf[ResponseMarketData]
-    marketData = mCast.timeseries
-    historyFetched = true
-  })
 
   protected def tactics() = {
     import timeseries.TimeseriesP._;
@@ -296,6 +358,7 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
 
 
     historyFetched = false
+
     def historic_demand: TimeseriesC[Int] = sum_grp[SalesRecord](marketData, _.num_ordered);
 
     val past_demand: TimeseriesC[Int] =
@@ -320,7 +383,7 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
     // the number of units we are producing if all production lines
     // are perfectly efficient (= we can source all consumables)
     def units_produced(num_pl: Int) =
-      num_pl * pls.theoretical_max_productivity 
+      num_pl * pls.theoretical_max_productivity
 
     val suitable_num_pl = argmin(1, num_pl,
           (n: Int) => math.abs(demand_fc - units_produced(n)));
@@ -386,74 +449,6 @@ class Factory(pls: ProductionLineSpec) extends SimO() {
     }*/
 
     goal_num_pl = suitable_num_pl;
-  }
-
-
-  // This is the cost-based price of product on stock
-  override def price(dummy: Commodity): Option[Double] = {
-    if (available(pls.produced._1) > 0)
-      Some(1.0 * inventory_avg_cost.getOrElse(pls.produced._1, 0.0))
-    else None
-  }
-
-  var initC = true
-
-  override protected def algo = __forever(
-    __if(initC)(
-      __do {
-        // Get market ids from environment
-        for (x <- pls.required) {
-          sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, x._1))
-        }
-        for (x <- pls.consumed) {
-          sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, x._1))
-        }
-        sendMessage(MarketRequest(this.id, _root_.simulation.ENVIRONMENT_ID, pls.produced._1))
-        initC = false
-      }
-    ),
-    __do {
-
-      val mgmt_step_size = 6;
-
-      if (prev_mgmt_action + mgmt_step_size < current_time)
-      //if(shared.timer % mgmt_step_size == mgmt_step_size - 1)
-      {
-        prev_mgmt_action = current_time; // call before tactics to avoid
-        // immediate recursion in nested simulation.
-        tactics1();
-      }
-
-      if (historyFetched) {
-        tactics()// changes goal_num_pl
-      }
-
-      for (i <- (pl.length + 1) to goal_num_pl)
-        add_production_line();
-      for (i <- (goal_num_pl + 1) to pl.length)
-        remove_production_line();
-
-      // TODO: buy more to get better prices?
-      //println("Factory.algo: this=" + this);
-      val still_missing = bulk_buy_missing(pls.consumed, pl.length);
-    },
-    __wait(1),
-    __do {
-      //assert(hr.employees.length == pl.length * pls.employees_needed);
-      hr.pay_workers();
-    }
-  )
-
-  override def run_until(until: Int): (Sim, Option[Int]) = {
-    // this ordering is important, so that bulk buying
-    // happens before consumption.
-    val nxt1 = super.run_until(until)._2.get
-    if (pl.nonEmpty) {
-      val nxt2 = pl.map(_.run_until(until)._2.get).min
-      (this, Some(math.min(nxt1, nxt2))) // compute a meaningful next time
-    } else {
-      (this, Some(nxt1))
-    }
   }
 
 

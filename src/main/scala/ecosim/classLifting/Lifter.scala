@@ -1,11 +1,11 @@
 package ecosim.classLifting
 
 import ecosim.deep.IR
-import IR.Predef._
-import IR.TopLevel._
-import IR.Predef.base.MethodApplication
-import ecosim.deep.algo.{Algo, CallMethod, DoWhile, Foreach, IfThenElse, LetBinding, NoOp, ScalaCode, Send, Wait}
-import ecosim.deep.member.{Actor, ActorType, LiftedMethod, RequestMessage, State}
+import ecosim.deep.IR.Predef._
+import ecosim.deep.IR.Predef.base.MethodApplication
+import ecosim.deep.IR.TopLevel._
+import ecosim.deep.algo._
+import ecosim.deep.member._
 
 import scala.annotation.tailrec
 
@@ -27,7 +27,7 @@ class Lifter {
   //TODO add dowhile to codeLift
   /** Lifts the classes and object initialization
     *
-    * @param startClasses - classes that need to be lifted, in form of [[Clasz]]
+    * @param startClasses        - classes that need to be lifted, in form of [[Clasz]]
     * @param initializationClass - contains only one method, which has to return a list of [[Actor]]
     * @return deep embedding of the classes
     */
@@ -64,20 +64,20 @@ class Lifter {
     val actorSelfVariable: Variable[_ <: Actor] = clasz.self.asInstanceOf[Variable[T]]
     //lifting states - class attributes
     var endStates: List[State[_]] = List()
-    endStates = clasz.fields.map{case field => {
-      import field.A
+    endStates = clasz.fields.map { case field => {
       State(field.symbol, field.A, field.init)
-    }}
+    }
+    }
     var endMethods: List[LiftedMethod[_]] = List()
     var mainAlgo: Algo[_] = DoWhile(code"true", Wait())
     //lifting methods - with main method as special case
-    clasz.methods.foreach({case method:clasz.Method[a,b] => {
+    clasz.methods.foreach({ case method: clasz.Method[a, b] => {
       import method.A
-      val cde:OpenCode[method.A] = method.body.asOpenCode
+      val cde: OpenCode[method.A] = method.body.asOpenCode
       val mtdBody = liftCode[method.A](cde, actorSelfVariable, clasz)
 
       endMethods = (new LiftedMethod[method.A](clasz, mtdBody, methodsMap(method.symbol).blocking, methodsIdMap(method.symbol)) {
-        override val mtd: cls.Method[method.A, cls.Scp] = method.asInstanceOf[this.cls.Method[method.A,cls.Scp]]
+        override val mtd: cls.Method[method.A, cls.Scp] = method.asInstanceOf[this.cls.Method[method.A, cls.Scp]]
       }) :: endMethods
 
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
@@ -108,70 +108,80 @@ class Lifter {
 
   /** Lifts an [[OpenCode]](expression) into its deep representation [[Algo]]
     *
-    * @param cde - an [[OpenCode]] that will be lifted
+    * @param cde               - an [[OpenCode]] that will be lifted
     * @param actorSelfVariable - a self [[Variable]] of this actor, used to create messages
-    * @param clasz - representatation of the [[Actor]] type, used to create a message handler for his methods
+    * @param clasz             - representatation of the [[Actor]] type, used to create a message handler for his methods
     * @tparam T - return type of the expression
     * @return [[Algo]] - deep representation of the expression
     */
   private def liftCode[T: CodeType](cde: OpenCode[T], actorSelfVariable: Variable[_ <: Actor], clasz: Clasz[_ <: Actor]): Algo[T] = {
     cde match {
-      case code"val $x: $xt = $v; $rest: T" =>
+      case code"val $x: squid.lib.MutVar[$xt] = squid.lib.MutVar.apply[xt]($v); $rest: T " =>
+        val f = LetBinding(
+          Some(x.asInstanceOf[Variable[Any]]),
+          liftCode(v.asInstanceOf[OpenCode[Any]], actorSelfVariable, clasz),
+          liftCode(rest, actorSelfVariable, clasz),
+          true,
+          xt
+        )
+        f.asInstanceOf[Algo[T]]
+      case code"val $x: $xt = $v; $rest: T " =>
         val f = LetBinding(Some(x), liftCode(v, actorSelfVariable, clasz), liftCode(rest, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
-      case code"$e; $rest: T" =>
+      case code"$e; $rest: T " =>
         val f = LetBinding(None, liftCode(e, actorSelfVariable, clasz), liftCode(rest, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
-      case code"()" =>
+      case code"() " =>
         val f = NoOp()
         f.asInstanceOf[Algo[T]]
-      case code"($x: List[$tb]).foreach[$ta](($y: tb) => $foreachbody)" =>
+      case code"($x: List[$tb]).foreach[$ta](($y: tb) => $foreachbody) " =>
         val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()", actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
-      case code"while(true) $body" =>
+      case code"while(true) $body " =>
         val f = DoWhile(code"true", liftCode(body, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
-      case code"if($cond: Boolean) $ifBody:T else $elseBody: T" =>
+      case code"if($cond: Boolean) $ifBody:T else $elseBody: T " =>
         val f = IfThenElse(cond, liftCode(ifBody, actorSelfVariable, clasz), liftCode(elseBody, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"SpecialInstructions.waitTurns(${Const(turns: Int)})" =>
         val f = liftWait(turns)
         f.asInstanceOf[Algo[T]]
-      case code"SpecialInstructions.handleMessages()" =>
+      case code"SpecialInstructions.handleMessages() " =>
         //generates an IfThenElse for each of this class' methods, which checks if the called method id is the same
         //as any of this class' methods, and calls the method if it is
         val resultMessageCall = Variable[Any]
         val p1 = Variable[RequestMessage]
-        val algo: Algo[Any] = NoOp()
+        //Default, add back, if message is not for my message handler, it its for a merged actor
+        val algo: Algo[Any] = ScalaCode(code"$actorSelfVariable.addReceiveMessages(List($p1))")
         val callCode = clasz.methods.foldRight(algo)((method, rest) => {
-            val methodId = methodsIdMap(method.symbol)
-            val methodInfo = methodsMap(method.symbol)
-            //map method parameters correctly
-            val argss: List[List[OpenCode[_]]] = methodInfo.vparams.zipWithIndex.map(x => {
-              x._1.zipWithIndex.map(y => {
-                code"$p1.argss(${Const(x._2)})(${Const(y._2)})"
-              })
+          val methodId = methodsIdMap(method.symbol)
+          val methodInfo = methodsMap(method.symbol)
+          //map method parameters correctly
+          val argss: List[List[OpenCode[_]]] = methodInfo.vparams.zipWithIndex.map(x => {
+            x._1.zipWithIndex.map(y => {
+              code"$p1.argss(${Const(x._2)})(${Const(y._2)})"
             })
-            IfThenElse(code"$p1.methodId==${Const(methodId)}", CallMethod[Any](methodId, argss), rest)
+          })
+          IfThenElse(
+            code"$p1.methodId==${Const(methodId)}",
+            LetBinding(Option(resultMessageCall),CallMethod[Any](methodId, argss),ScalaCode(code"""$p1.reply($actorSelfVariable, $resultMessageCall)""")),
+            rest
+          )
 
         })
 
         //for each received message, use callCode
         val handleMessage = Foreach(
           code"$actorSelfVariable.popRequestMessages",
-          p1, LetBinding(
-            Option(resultMessageCall),
-            callCode,
-            ScalaCode(code"""$p1.reply($actorSelfVariable, $resultMessageCall)""")
-          )
+          p1, callCode
         )
         handleMessage.asInstanceOf[Algo[T]]
-      case code"${MethodApplication(ma)}:Any" if methodsIdMap.get(ma.symbol).isDefined =>
+      case code"${MethodApplication(ma)}:Any " if methodsIdMap.get(ma.symbol).isDefined =>
         //extracting arguments and formatting them
         val argss = ma.args.tail.map(args => args.toList.map(arg => code"$arg")).toList
         //method is local - method recipient is this(self)
         val recipientActorVariable = ma.args.head.head.asInstanceOf[OpenCode[Actor]]
-        if(actorSelfVariable == recipientActorVariable) {
+        if (actorSelfVariable == recipientActorVariable) {
           val f = CallMethod(methodsIdMap(ma.symbol), argss)
           f.asInstanceOf[Algo[T]]
         }

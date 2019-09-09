@@ -26,15 +26,15 @@ package Owner {
   class Seller extends Owner {
     var order_history: LogList[SalesRecord] = new LogList[SalesRecord]
 
+    // only one global price, not for speculators.
+    // override to offer stuff.
+    def price(item: Commodity): Option[Double] = None
+
     protected def copy_state_to(_to: Seller) {
       //println("Seller.copy_state_to: " + this);
       super.copy_state_to(_to)
       _to.order_history = order_history.copy()
     }
-
-    // only one global price, not for speculators.
-    // override to offer stuff.
-    def price(item: Commodity): Option[Double] = None
 
     /** A partial sell, using the price from this[Seller].price.
       * *
@@ -64,9 +64,8 @@ package Owner {
 
 package Markets {
 
-  import Owner._
   import old.Commodities.Commodity
-  import old.{MarketMatchingUtilities, MarketSelling, SimO}
+  import old.Owner._
   import simulation._
 
 
@@ -98,11 +97,24 @@ package Markets {
       n
     }
 
-    override def algo: Instruction = __forever(__do{}, __wait(1))
+    override def algo: Instruction = __forever(__do {}, __wait(1))
 
     /*def add_seller(s: Seller) {
       sellers = s :: sellers;
     }*/
+
+    def ask_price(): Option[Double] = {
+      val (p, l) = ask_price(1)
+      if (l == 0) None else Some(p)
+    }
+
+    def ask_price(units: Int): (Double, Int) = {
+      val (left_over, l) = best_match(units, -1)
+      (compute_price(l), units - left_over)
+    }
+
+    /*l.map((t: (Int, Seller)) =>
+    t._2.price(commodity).getOrElse(1.0 / 0) * t._1).sum*/
 
     /** returns (#unmatched, List[(#matched with this seller, seller)]).  */
     private def best_match(units: Int,
@@ -123,19 +135,6 @@ package Markets {
     private def compute_price(l: List[(Int, (AgentId, Int, Double))]): Double =
       l.map(x => x._2._3 * x._1).sum
 
-      /*l.map((t: (Int, Seller)) =>
-      t._2.price(commodity).getOrElse(1.0 / 0) * t._1).sum*/
-
-    def ask_price(units: Int): (Double, Int) = {
-      val (left_over, l) = best_match(units, -1)
-      (compute_price(l), units - left_over)
-    }
-
-    def ask_price(): Option[Double] = {
-      val (p, l) = ask_price(1)
-      if (l == 0) None else Some(p)
-    }
-
     /** execute immediately, partial fulfillment possible. */
     def market_buy_order_now(time: Int, buyer: AgentId, units: Int): Int = {
       //println("SellersMarket.market_buy_order_now " + this);
@@ -149,7 +148,7 @@ package Markets {
         if (x._2 - u <= 0) {
           goods = goods.filter(_._1 != s._1)
         } else {
-          var y = (x._1,x._2-u,x._3)
+          var y = (x._1, x._2 - u, x._3)
           goods = y :: goods.filter(_._1 != s._1)
         }
         //s.sell_to(time, buyer, commodity, u)
@@ -166,7 +165,7 @@ package Markets {
       0
     }
 
-    setMessageHandler("MarketSellMessage", (m:Message) => {
+    setMessageHandler("MarketSellMessage", (m: Message) => {
       val mCast = m.asInstanceOf[MarketSellMessage]
       val seller = goods.find(_._1 == mCast.senderId)
       if (seller.isDefined) {
@@ -178,13 +177,13 @@ package Markets {
       }
     })
 
-    setMessageHandler("MarketBuyMessage", (m:Message) => {
+    setMessageHandler("MarketBuyMessage", (m: Message) => {
       val mCast = m.asInstanceOf[MarketBuyMessage]
 
       market_buy_order_now(current_time, mCast.senderId, mCast.units)
     })
 
-    setMessageHandler("RequestMarketData", (m:Message) => {
+    setMessageHandler("RequestMarketData", (m: Message) => {
       sendMessage(ResponseMarketData(this.id, m.senderId, order_history.toTimeseries))
     })
   }

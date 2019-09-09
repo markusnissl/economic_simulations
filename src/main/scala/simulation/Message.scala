@@ -53,17 +53,18 @@ case class ResponseMarketData(override val senderId: AgentId, override val recei
 
 // General message
 case class RequestMessageInter(override val senderId: AgentId, override val receiverId: AgentId, methodId: Int, argss: List[List[Any]]) extends Message {
-  def reply(owner: Owner, returnValue:Any): Unit = {
+  def reply(owner: Owner, returnValue: Any): Unit = {
     val msg = ResponseMessageInter[Any](receiverId, senderId, returnValue)
     msg.sessionId = this.sessionId
     owner.sendMessage(msg)
   }
 }
+
 case class ResponseMessageInter[A](override val senderId: AgentId, override val receiverId: AgentId, arg: A) extends Message
 
 case class RequestMessage(override val senderId: AgentId, override val receiverId: AgentId, call_f: Any => Any) extends Message {
 
-  def reply(owner: Owner, returnValue:Any): Unit = {
+  def reply(owner: Owner, returnValue: Any): Unit = {
     val msg = ResponseMessage(receiverId, senderId, returnValue)
     msg.sessionId = this.sessionId
     owner.sendMessage(msg)

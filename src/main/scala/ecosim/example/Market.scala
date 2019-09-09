@@ -26,8 +26,13 @@ class Market extends Actor {
   }
 
   def main() = {
-    //var x = 0
-    while(true) {
+    var x = 21
+    x = x + 1
+    var y = 11
+    var z = x + y
+    println(z)
+
+    while (true) {
       handleMessages()
       //x = x + 1
       //println("Binding test:", x)

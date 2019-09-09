@@ -3,19 +3,18 @@ package ecosim.deep.codegen
 import java.io.{BufferedWriter, File, FileWriter}
 
 import ecosim.deep.IR
+import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo
-import ecosim.deep.algo.AlgoInfo.{CodeNodePos, EdgeInfo}
+import ecosim.deep.algo.AlgoInfo.EdgeInfo
+import ecosim.deep.member.Actor
 
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.ListBuffer
-import ecosim.deep.IR.Predef._
-import ecosim.deep.member.Actor
-import squid.lib.MutVar
 
 
 class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() {
 
   var compiledActorGraphs: List[CompiledActorGraph] = Nil
+
   override def run(compiledActorGraphs: List[CompiledActorGraph]): List[CompiledActorGraph] = {
     this.compiledActorGraphs = compiledActorGraphs
 
@@ -36,8 +35,8 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     val code = this.createCommandOpenCode(commands)
     val codeWithInit = this.generateVarInit(compiledActorGraph.variables2, this.generateMutVarInit(compiledActorGraph.variables,
       code"""
-              val ${AlgoInfo.timeVar} = MutVar(0)
-              val ${AlgoInfo.positionVar} = MutVar(0)
+              val ${AlgoInfo.timeVar} = squid.lib.MutVar(0)
+              val ${AlgoInfo.positionVar} = squid.lib.MutVar(0)
               val getCommands = () => $code
               val commands = getCommands()
               ecosim.deep.algo.Instructions.splitter
@@ -84,6 +83,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     var changeCodePos: List[(Int, EdgeInfo)] = List()
     var requiredSavings: List[Int] = List()
     var posEdgeSaving: Map[(Int, Int), Int] = Map()
+    var edgeSaving: Map[(Int, Int), Int] = Map()
 
     def generateCodeInner(node: Int): Unit = {
 
@@ -122,14 +122,11 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
             unknownCond = unknownCond + 1
           }
         })
-        if (unknownCond > 1) {
-          requiredSavings = target :: requiredSavings
-        }
 
         var posChanger: OpenCode[Unit] = code"${AlgoInfo.positionVar} := ${Const(nextPos)}"
         if (unknownCond > 1) {
-          //TODO, adapt for multiple stacks for merging actors
-          posChanger = code"${AlgoInfo.positionVar} := ${compiledActorGraph.positionStack.head}.remove(0); ()"
+          requiredSavings = target :: requiredSavings
+          posChanger = code"${AlgoInfo.positionVar} := ${edge.positionStack}.remove(0).find(x => x._1 == (${Const(edge.edgeState._1)},${Const(edge.edgeState._2)})).get._2; ()"
         }
 
         val currentCodePos = code.length
@@ -140,6 +137,7 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
         if (unknownCondNode > 1 && edge.cond == null) {
           posEdgeSaving = posEdgeSaving + ((node, target) -> currentCodePos)
         }
+        edgeSaving = edgeSaving + ((node, target) -> currentCodePos)
 
         if (edge.cond != null) {
           code.append(code"if(${edge.cond}) {${edge.code}; $posChanger} else {}")
@@ -173,40 +171,76 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     changeCodePos.foreach(x => {
       val c = code(x._1)
       x._2.storePosRef.foreach(edgeInfoGroup => {
-        edgeInfoGroup.foreach(edgeInfo => {
-          // TODO: adapt code for work with multi state positions
+
+        var amountM1: Int = 0
+
+        val edgeInfos = edgeInfoGroup.map(edgeInfo => {
           val startPos = edgeInfo.from.getNativeId
           val endPos = edgeInfo.to.getNativeId
-
-          if (requiredSavings.contains(edgeInfo.from.getNativeId)) {
-            val newPos = posEdgeSaving((startPos, endPos))
-
-            code(x._1) = code"$c; ${compiledActorGraph.positionStack.head}.prepend(${Const(newPos)})"
+          if (!requiredSavings.contains(edgeInfo.from.getNativeId)) {
+            amountM1 = amountM1 + 1
           }
+          (edgeInfo.edgeState, edgeSaving((startPos, endPos)), edgeInfo.positionStack, (edgeInfo.from.getNativeId, edgeInfo.to.getNativeId))
         })
+
+        //The basic idea was this, but it may not hold, therefore this assert to change the implementation
+        //It's either all or non of them, so either it's a direct call or it's not, since the local graph
+        //is not modified, so method inlining should be applied to all subgraphs. If there is a wait, then it should
+        //be for all as well, so this makes no difference
+        assert(amountM1 == 0 || amountM1 == edgeInfos.length)
+
+
+        //There are some edges, which require a stack value
+        //At the moment, we can assume, that there are either all edges not needing a jump position or not
+        //if (amountM1 < edgeInfos.length) {
+        if (amountM1 == 0) {
+          assert(edgeInfos.count(_._3 == edgeInfos.head._3) == edgeInfos.length)
+          val startCode = code"List[((Int, Int), Int)]()"
+          val lookupT = edgeInfos.foldRight(startCode)((a, b) => code"((${Const(a._1._1)},${Const(a._1._2)}),${Const(a._2)}) :: $b")
+          code(x._1) = code"$c; ${edgeInfos.head._3}.prepend($lookupT)"
+        }
+        //Find edges, which have no poping added and append poping from stack to remove value if added before
+        /*if (amountM1 != edgeInfos.length) {
+          edgeInfoGroup.foreach(edgeInfo => {
+            if (!requiredSavings.contains(edgeInfo.from.getNativeId)) {
+              val startPos = edgeInfo.from.getNativeId
+              val endPos = edgeInfo.to.getNativeId
+              val codePos:Int = edgeSaving((startPos, endPos))
+              val c1 = code"${edgeInfo.positionStack}.remove(0); ()"
+              val c2 = code(codePos)
+              code(codePos) = code"$c2; $c1"
+            }
+          })
+        }*/
+
+
       })
     })
+
 
     //Rewrite variables to replaced ones
     code = code.map(x => {
       var y = x
       compiledActorGraph.variables.foreach({
         case v => {
-          y = y.subs(v.from).~>(code"(${v.to}!).asInstanceOf[${v.A}]")
+          //Quick-fix for var types
+          if (v.from != null) {
+            y = y.subs(v.from).~>(code"(${v.to}!).asInstanceOf[${v.A}]")
+          }
         }
       })
       y
     })
-
 
     code.toList
   }
 
   /**
     * Creates the class file
+    *
     * @param initParams state variables
-    * @param initVars generated variables needed globally
-    * @param run_until function, which overrides the run until method
+    * @param initVars   generated variables needed globally
+    * @param run_until  function, which overrides the run until method
     */
   def createClass(className: String, initParams: String, initVars: String, run_until: String): Unit = {
     val classString =
@@ -242,21 +276,6 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     commands.map(x => code"List(() => ${x})").foldLeft(start)((x, y) => code"$x ::: $y")
   }
 
-
-  /**
-    * Generates init code of one variable of type VarWrapper
-    *
-    * @param variable of type VarWrapper
-    * @param rest     Code, where variables should be applied to
-    * @tparam A type of variable
-    * @tparam R return type of code
-    * @return rest with bounded variable
-    */
-  private def initVar[A, R: CodeType](variable: AlgoInfo.VarWrapper[A], rest: OpenCode[R]): OpenCode[R] = {
-    import variable.A
-    code"val ${variable.to} = MutVar(${nullValue[A]}); $rest"
-  }
-
   /**
     * Generates init code for variables of a list of VarWrappers
     *
@@ -270,19 +289,6 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     case (x :: xs) => {
       initVar(x, generateMutVarInit(xs, after))
     }
-  }
-
-  /**
-    * Generates init code of one variable of type VarValue
-    *
-    * @param variable variable of type VarValue
-    * @param rest     Code, where variables should be applied to
-    * @tparam A type of variable
-    * @tparam R return type of code
-    * @return rest with bounded variable
-    */
-  private def initVar2[A, R: CodeType](variable: VarValue[A], rest: OpenCode[R]): OpenCode[R] = {
-    code"val ${variable.variable} = ${variable.init}; $rest"
   }
 
   /**
@@ -300,7 +306,6 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     }
   }
 
-
   def createInit(code: String): Unit = {
     val classString =
       s"""
@@ -314,6 +319,33 @@ class CreateCode(initCode: OpenCode[List[Actor]]) extends StateMachineElement() 
     val bw = new BufferedWriter(new FileWriter(file))
     bw.write(classString)
     bw.close()
+  }
+
+  /**
+    * Generates init code of one variable of type VarWrapper
+    *
+    * @param variable of type VarWrapper
+    * @param rest     Code, where variables should be applied to
+    * @tparam A type of variable
+    * @tparam R return type of code
+    * @return rest with bounded variable
+    */
+  private def initVar[A, R: CodeType](variable: AlgoInfo.VarWrapper[A], rest: OpenCode[R]): OpenCode[R] = {
+    import variable.A
+    code"val ${variable.to} = squid.lib.MutVar(${nullValue[A]}); $rest"
+  }
+
+  /**
+    * Generates init code of one variable of type VarValue
+    *
+    * @param variable variable of type VarValue
+    * @param rest     Code, where variables should be applied to
+    * @tparam A type of variable
+    * @tparam R return type of code
+    * @return rest with bounded variable
+    */
+  private def initVar2[A, R: CodeType](variable: VarValue[A], rest: OpenCode[R]): OpenCode[R] = {
+    code"val ${variable.variable} = ${variable.init}; $rest"
   }
 
 }
