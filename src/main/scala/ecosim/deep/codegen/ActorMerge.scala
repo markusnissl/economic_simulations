@@ -30,7 +30,9 @@ class ActorMerge() extends StateMachineElement() {
 
     val rest = compiledActorGraphs.tail.tail
 
-    CompiledActorGraph(a1.name + "_" + a2.name, finalGraph, a1.variables ::: a2.variables, a1.variables2 ::: a2.variables2, a1.actorTypes ::: a2.actorTypes, a1.positionStack ::: a2.positionStack) :: rest
+    val freePosition = finalGraph.flatMap(edge => edge.from :: edge.to :: Nil).maxBy(node => node.getNativeId).getNativeId + 1
+
+    CompiledActorGraph(a1.name + "_" + a2.name, finalGraph, a1.variables ::: a2.variables, a1.variables2 ::: a2.variables2, a1.actorTypes ::: a2.actorTypes, a1.positionStack ::: a2.positionStack, freePosition, a1.returnValue ::: a2.returnValue, a1.responseMessage ::: a2.responseMessage) :: rest
   }
 
   /**

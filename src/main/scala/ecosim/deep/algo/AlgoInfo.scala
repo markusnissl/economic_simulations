@@ -150,9 +150,10 @@ object AlgoInfo {
     * @param sendInfo if this edge is a send, keeps a reference to [[Send]] for relevant info, and also a
     *                 boolean which is true if this is the first in sequence of edges representing the send
     * @param methodId1 if the edge is part of method, keeps its id
+    * @param methodCallInfo if the edge is a part of call method, keep the reference to [[CallMethod]] and also the
+    *                       ordinal number of this edge (first, second or third)
     */
   //TODO change the structure so it contains any algo info instead of sendInfo, methodId, callMethodInfo, waitEdge and so on
-  //TODO had to change most of stuff to var... ask if its a problem
   case class EdgeInfo(var label: String,
                       var from: CodeNode,
                       var to: CodeNode,
@@ -166,7 +167,7 @@ object AlgoInfo {
                       var positionStack: Variable[ListBuffer[List[((Int, Int), Int)]]] = AlgoInfo.positionStack,
                       var sendInfo: (Send[_], Boolean) = null,
                       var methodId1: Int = methodId,
-                      var methodCallInfo: CallMethod[_] = null,
+                      var methodCallInfo: (CallMethod[_], Int) = (null, -1),
                      ) {
 
     def myCopy(): EdgeInfo = {

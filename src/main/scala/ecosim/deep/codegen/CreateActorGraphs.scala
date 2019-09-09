@@ -9,7 +9,6 @@ import squid.lib.MutVar
 import scala.annotation.tailrec
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-//TODO ask markus if theres a problem with this
 object CreateActorGraphs {
   case class MutVarType[A](variable: Variable[MutVar[A]], codeType: CodeType[A])
   val methodVariableTable: collection.mutable.Map[Int, ArrayBuffer[MutVarType[_]]] = collection.mutable.Map[Int, ArrayBuffer[MutVarType[_]]]()
@@ -115,7 +114,7 @@ class CreateActorGraphs(actorTypes: List[ActorType[_]]) extends ConvertElement(a
 
     variables = VarValue(AlgoInfo.returnValue, code"MutVar[Any](null)") :: VarValue(AlgoInfo.positionStack, code"ListBuffer[List[((Int,Int),Int)]]()") :: VarValue(AlgoInfo.responseMessage, code"MutVar[ecosim.deep.member.ResponseMessage](null)") :: variables
 
-    CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType), List[Variable[ListBuffer[List[((Int, Int), Int)]]]](AlgoInfo.positionStack), AlgoInfo.posCounter)
+    CompiledActorGraph(actorType.name, AlgoInfo.stateGraph.clone(), AlgoInfo.variables, variables, List[ActorType[_]](actorType), List[Variable[ListBuffer[List[((Int, Int), Int)]]]](AlgoInfo.positionStack), AlgoInfo.posCounter, List(AlgoInfo.returnValue), List(AlgoInfo.responseMessage))
   }
 
   // expand with a loop at the end, so that we wait at the end until finished (no dead end)

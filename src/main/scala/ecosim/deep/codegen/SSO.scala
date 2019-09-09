@@ -1,6 +1,6 @@
 package ecosim.deep.codegen
 
-import ecosim.deep.algo.AlgoInfo.{CodeNodeMtd, CodeNodePos, EdgeInfo}
+import ecosim.deep.algo.AlgoInfo.{CodeNode, CodeNodeMtd, CodeNodePos, EdgeInfo}
 import ecosim.deep.algo.{Algo, AlgoInfo, CallMethod, Send}
 import ecosim.deep.IR.Predef._
 import ecosim.deep.codegen.CreateActorGraphs.{MutVarType, methodVariableTable, methodVariableTableStack}
@@ -9,8 +9,7 @@ import ecosim.deep.member.Actor
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 //TODO when copying a method copy it into my ActorType to stay consistent
-//TODO add 2 waits when sending a blocking message................ ask if its okay
-//TODO substitute all actor references in code and cond of edgeinfo to this
+//FIXME this part relies on methodVariableTable and methodVariableTableStack which are global, and might not be valid at this point
 class SSO extends StateMachineElement() {
 
   //TODO change the structure to something more clear. e.g. its hard to see here what the usage of these structurs will be
@@ -28,10 +27,9 @@ class SSO extends StateMachineElement() {
         optimizeElement(element, compiledActorGraphs.filter(otherElement => otherElement != element))
       })
     }
+    graphs.foreach(g => g.graph.foreach(edge => edge.positionStack = g.positionStack.head))
     graphs.foreach(g => mtdToPosNodes(g.graph))
-    graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name+" SSOmerged"))
-    //TODO ask if this is okay, or do i need to make a new position stack or something.
-    graphs.foreach(g => g.graph.foreach(edge => edge.positionStack = g.positionStack.head)) //FIXME put this in the method code somewhere. dont know why it wont work
+//    graphs.foreach(g => GraphDrawing.drawGraph(g.graph, g.name+" SSOmerged"))
     graphs
   }
 
@@ -64,6 +62,27 @@ class SSO extends StateMachineElement() {
         case _ =>
       }
     })
+  }
+
+  def surroundWithWaitEdges(edges: ArrayBuffer[EdgeInfo], methodId: Int): ArrayBuffer[EdgeInfo] = {
+    val firstFrom = edges.head.from
+    edges.foreach(edge1 => {
+      edge1.to match {
+        case c: CodeNodePos =>
+          edge1.to = CodeNodePos(c.pos + 1)
+        case _ =>
+      }
+      edge1.from match {
+        case c: CodeNodePos =>
+          edge1.from = CodeNodePos(c.pos + 1)
+        case _ =>
+      }
+    })
+    val w1 = AlgoInfo.EdgeInfo("wait", firstFrom, edges.head.from, code"()", waitEdge = true, methodId1 = methodId)
+    val w2 = AlgoInfo.EdgeInfo("wait", edges.last.to, CodeNodePos(edges.last.to.asInstanceOf[CodeNodePos].pos + 1), code"()", waitEdge = true, methodId1 = methodId)
+    edges.prepend(w1)
+    edges.append(w2)
+    edges
   }
 
   def optimizeElement(element: CompiledActorGraph, rest: List[CompiledActorGraph]): CompiledActorGraph = {
@@ -118,25 +137,40 @@ class SSO extends StateMachineElement() {
           element.actorTypes.head.states = (element.actorTypes.head.states ::: at.states).distinct
         })
         val methodToCopyGraph = neededElement.graph.filter(edge2 => edge2.methodId1 == methodId).map(edge2 => edge2.myCopy())
-        //TODO might need to fix this. ask markus if this will always be okay (it the cast is safe)
         val oldPos = methodToCopyGraph.head.from.asInstanceOf[CodeNodePos].pos
         var newFreePos = element.freePosition
-        //moving the tos and froms to fit this graph
-        // and fixing the method id and position stack
-        // and fixing the reference from another actor to self
+        //moving the tos and froms to fit this graph,
+        // fixing the method id,
+        // fixing the reference from another actor to self,
+        // from another actors response message to this response message
+        // and from another actors return value this return value
         methodToCopyGraph.foreach(edge1 => {
           edge1.methodId1 = newMethodId
-          //TODO ask if this is correct...
           neededElement.actorTypes.foreach( at => {
-            if (edge1.code != null)
-              edge1.code = at.self.asInstanceOf[Variable[Actor]].substitute(edge1.code.unsafe_asClosedCode, element.actorTypes.head.self.asInstanceOf[Variable[Actor]].toCode)
-            //TODO ask if this is even needed. if not, change .cond to val instead of var
-            if (edge1.cond != null)
-              edge1.cond = at.self.asInstanceOf[Variable[Actor]].substitute(edge1.cond.unsafe_asClosedCode, element.actorTypes.head.self.asInstanceOf[Variable[Actor]].toCode)
+            val selfThis = element.actorTypes.head.self.asInstanceOf[Variable[Actor]]
+            val otherThis = at.self.asInstanceOf[Variable[Actor]]
+            //FIXME this will maybe break the app after merging a few graphs together
+            // because here theres no check if the right return value is taken (from all of the merged graphs)
+            val selfReturnValue = element.returnValue.head
+            val otherReturnValue = neededElement.returnValue.head
+            val selfResponseMessage = element.responseMessage.head
+            val otherResponseMessage = neededElement.responseMessage.head
+            if (edge1.code != null) {
+              edge1.code = edge1.code.subs(otherThis).~>(selfThis.toCode)
+              edge1.code = edge1.code.subs(otherReturnValue).~>(selfReturnValue.toCode)
+              edge1.code = edge1.code.subs(otherResponseMessage).~>(selfResponseMessage.toCode)
+            }
+            if (edge1.cond != null) {
+              edge1.cond = edge1.cond.subs(otherThis).~>(selfThis.toCode)
+              //TODO check why this doesnt work
+//              edge1.code = edge1.cond.subs(otherReturnValue).~>(selfReturnValue.toCode)
+//              edge1.code = edge1.cond.subs(otherResponseMessage).~>(selfResponseMessage.toCode)
+            }
           })
           edge1.from match {
             case c: CodeNodePos =>
               edge1.from = CodeNodePos(c.pos - oldPos + element.freePosition)
+              newFreePos = edge1.to.asInstanceOf[CodeNodePos].pos + 1
             case _ =>
           }
           edge1.to match {
@@ -149,34 +183,27 @@ class SSO extends StateMachineElement() {
         element.freePosition = newFreePos
         //add the new method to the graph
         element.graph = element.graph ++ methodToCopyGraph
-        //have to add it here, because if its a recursive function this should work well
-        //TODO check if it works for recursive functions
+        //remember that the method was added. do it here, so in case of recursion it will not get copied again, just called
         oldToNewMtdIds = oldToNewMtdIds + (element.name -> (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()) + (methodId -> newMethodId)))
 
         //after copying the graph check if it has a call method somewhere,
         // if it does, that method has to be copied from the other actor as well
         // and the edges calling the method need to be changed
+        var methodCallIndex = 0
         methodToCopyGraph.foreach(edge1 => {
-          if (edge1.methodCallInfo != null) {
-            val calledMethodId = edge1.methodCallInfo.methodId
+          if (edge1.methodCallInfo._1 != null) {
+            val calledMethodId = edge1.methodCallInfo._1.methodId
             var copiedMethodId = -1
             //if it was already copied, no need to do it again
             if (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()).get(calledMethodId).isDefined) {
               copiedMethodId = oldToNewMtdIds(element.name)(calledMethodId)
             } else {
-              //TODO really debug this part
-//              val futureId = simulation.Generator.getNextMethodId
-//              simulation.Generator.revertNextMethodId
-//              edge1.label = edge1.label.replaceAll(calledMethodId.toString, futureId.toString)
-//              //TODO check if its okay to be any
-//              edge1.methodCallInfo = CallMethod[Any](futureId, edge1.methodCallInfo.argss)
-
               copiedMethodId = copyMethod(element, neededElement, calledMethodId)
               oldToNewMtdIds = oldToNewMtdIds + (element.name -> (oldToNewMtdIds.getOrElse(element.name, Map[Int,Int]()) + (methodId -> newMethodId)))
             }
             edge1.label = edge1.label.replaceFirst(calledMethodId.toString, copiedMethodId.toString)
-            //TODO check if its okay to be any
-            edge1.methodCallInfo = CallMethod[Any](copiedMethodId, edge1.methodCallInfo.argss)
+            edge1.methodCallInfo = (CallMethod[Any](copiedMethodId, edge1.methodCallInfo._1.argss), methodCallIndex)
+            methodCallIndex = (methodCallIndex + 1) % 3
             //if this edge contains a CodeNodeMtd, its method id has to be changed
             edge1.from match {
               case c: CodeNodeMtd =>
@@ -191,17 +218,18 @@ class SSO extends StateMachineElement() {
           }
         })
         //need to fix the restore positions of each method call
-        val copiedMethodCalls = methodToCopyGraph.groupBy(edge1 => edge1.methodCallInfo)
+        // and also for each copied method call, set the positions correctly
+        val copiedMethodCalls = methodToCopyGraph.groupBy(edge1 => edge1.methodCallInfo._1)
         copiedMethodCalls.foreach(group => {
           if (group._1 != null) {
-           setPosRef(group._2)
+            setPosRef(group._2)
+            setMtdRef(group._2)
           }
         })
         newMethodId
       }
     }
 
-    //TODO ask markus if its okay
     /*** given a list of call method edges, it will set them the right storePosRef
       *  called after copying a callMethod from another graph
       * @param callMethodEdges - list of call method edges, where each call method will have exactly 3 edges
@@ -215,29 +243,37 @@ class SSO extends StateMachineElement() {
       }
     }
 
+    def setMtdRef(callMethodEdges: ArrayBuffer[AlgoInfo.EdgeInfo]): Unit = {
+      val (currentMethodEdges, restMethodEdges) = callMethodEdges.splitAt(3)
+      val methodId = currentMethodEdges.head.methodCallInfo._1.methodId
+      currentMethodEdges.head.to = CodeNodeMtd(methodId, false)
+      currentMethodEdges.tail.head.from = CodeNodeMtd(methodId, true)
+      if (restMethodEdges.nonEmpty) {
+        setMtdRef(restMethodEdges)
+      }
+    }
+
 
     def createCallMethodNodes(newMethodId: Int, oldMethodId: Int, sendEdge: EdgeInfo, send: Send[_]): ArrayBuffer[EdgeInfo] = {
 
       AlgoInfo.resetData()
-      //TODO check if its okay to be any
       CallMethod[Any](newMethodId, send.argss).codegen
       val newEdges = AlgoInfo.stateGraph.map(edge1 => {
         //since its replacing the sendEdge, these edges have to belong to the same method as that sendEdge
         edge1.methodId1 = sendEdge.methodId1
         //move them to the right place
         edge1.from match {
-          //TODO check if the cast can be safely done
           case c: CodeNodePos => edge1.from = CodeNodePos(c.pos + sendEdge.from.asInstanceOf[CodeNodePos].pos)
           case _ =>
         }
         edge1.to match {
-          //TODO check if the cast can be safely done
           case c: CodeNodePos => edge1.to = CodeNodePos(c.pos + sendEdge.from.asInstanceOf[CodeNodePos].pos)
           case _ =>
         }
         edge1
       })
       AlgoInfo.resetData()
+      //rewrite the compile only methods to runtime methods
       CreateActorGraphs.methodVariableTableStack(newMethodId) = CreateActorGraphs.methodVariableTableStack(oldMethodId)
       CreateActorGraphs.methodVariableTable(newMethodId) = CreateActorGraphs.methodVariableTable(oldMethodId)
       rewriteCallMethod(newEdges)
@@ -284,17 +320,17 @@ class SSO extends StateMachineElement() {
             changes = changes + (edge -> List())
           }
           else {
-            val newEdges = createCallMethodNodes(newMethodId, methodId, edge, send)
+            var newEdges = createCallMethodNodes(newMethodId, methodId, edge, send)
             if (send.blocking) {
               if (edge.sendInfo._2) {
-                //TODO check if the cast can be safely done
+                //add 2 wait edges
+                surroundWithWaitEdges(newEdges, edge.methodId1)
                 val moveThreshold = newEdges.head.from.asInstanceOf[CodeNodePos].pos
-                val moveAmmount = -2
+                val moveAmmount = 0
                 moveGraphPositions(moveAmmount, moveThreshold)
                 changes = changes + (edge -> newEdges.toList)
               }
             } else {
-              //TODO check if the cast can be safely done
               val moveThreshold = newEdges.head.from.asInstanceOf[CodeNodePos].pos
               val moveAmmount = 1
               moveGraphPositions(moveAmmount, moveThreshold)

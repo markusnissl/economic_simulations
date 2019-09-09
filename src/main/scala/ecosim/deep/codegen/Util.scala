@@ -2,7 +2,8 @@ package ecosim.deep.codegen
 
 import ecosim.deep.IR.Predef._
 import ecosim.deep.algo.AlgoInfo.{EdgeInfo, VarWrapper}
-import ecosim.deep.member.ActorType
+import ecosim.deep.member.{ActorType, ResponseMessage}
+import squid.lib.MutVar
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
@@ -31,7 +32,9 @@ case class CompiledActorGraph(var name: String,
                               var variables2: List[VarValue[_]],
                               var actorTypes: List[ActorType[_]],
                               var positionStack: List[Variable[ListBuffer[List[((Int, Int), Int)]]]], //required to generate poping from stack statements at create code
-                              var freePosition: Int = 0
+                              var freePosition: Int = 0,
+                              returnValue: List[Variable[MutVar[Any]]],
+                              responseMessage: List[Variable[MutVar[ResponseMessage]]],
                              )
 
 /**
