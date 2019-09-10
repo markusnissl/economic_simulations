@@ -37,13 +37,13 @@ class Lifter {
     var counter = 0
     startClasses.map(c => c.methods).flatten
       .foreach(method => {
-          import method.A
-          methodsIdMap = methodsIdMap + (method.symbol -> counter)
-          var blocking = true
-          if (method.A <:< codeTypeOf[NBUnit]) blocking = false
-          methodsMap = methodsMap + (method.symbol -> new MethodInfo[method.A](method.symbol, method.tparams, method.vparams, blocking))
-          counter += 1
-          simulation.Generator.getNextMethodId
+        import method.A
+        methodsIdMap = methodsIdMap + (method.symbol -> counter)
+        var blocking = true
+        if (method.A <:< codeTypeOf[NBUnit]) blocking = false
+        methodsMap = methodsMap + (method.symbol -> new MethodInfo[method.A](method.symbol, method.tparams, method.vparams, blocking))
+        counter += 1
+        simulation.Generator.getNextMethodId
       })
     //lifting types
     val endTypes = startClasses.map(c => {
@@ -83,7 +83,8 @@ class Lifter {
       if (method.symbol.asMethodSymbol.name.toString() == "main") {
         mainAlgo = CallMethod[Unit](methodsIdMap(method.symbol), List(List()))
       }
-    }})
+    }
+    })
     val stateless = clasz.name.endsWith("stateless")
     ActorType[T](clasz.name, endStates, endMethods, mainAlgo, clasz.self.asInstanceOf[Variable[T]], stateless)
   }
@@ -137,8 +138,8 @@ class Lifter {
       case code"($x: List[$tb]).foreach[$ta](($y: tb) => $foreachbody) " =>
         val f: Foreach[tb.Typ, Unit] = Foreach(x, y, liftCode(code"$foreachbody; ()", actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
-      case code"while(true) $body " =>
-        val f = DoWhile(code"true", liftCode(body, actorSelfVariable, clasz))
+      case code"while($cond) $body " =>
+        val f = DoWhile(cond, liftCode(body, actorSelfVariable, clasz))
         f.asInstanceOf[Algo[T]]
       case code"if($cond: Boolean) $ifBody:T else $elseBody: T " =>
         val f = IfThenElse(cond, liftCode(ifBody, actorSelfVariable, clasz), liftCode(elseBody, actorSelfVariable, clasz))
@@ -164,7 +165,7 @@ class Lifter {
           })
           IfThenElse(
             code"$p1.methodId==${Const(methodId)}",
-            LetBinding(Option(resultMessageCall),CallMethod[Any](methodId, argss),ScalaCode(code"""$p1.reply($actorSelfVariable, $resultMessageCall)""")),
+            LetBinding(Option(resultMessageCall), CallMethod[Any](methodId, argss), ScalaCode(code"""$p1.reply($actorSelfVariable, $resultMessageCall)""")),
             rest
           )
 
@@ -217,9 +218,9 @@ class Lifter {
 
   /** Used for operations that were not covered in [[liftCode]]. Lifts an [[OpenCode]](expression) into its deep representation [[Algo]]
     *
-    * @param cde - an [[OpenCode]] that will be lifted
+    * @param cde               - an [[OpenCode]] that will be lifted
     * @param actorSelfVariable - a self [[Variable]] of this actor, used to create messages
-    * @param clasz - representatation of the [[Actor]] type, used to create a message handler for his methods
+    * @param clasz             - representatation of the [[Actor]] type, used to create a message handler for his methods
     * @tparam T - return type of the expression
     * @return [[Algo]] - deep representation of the expression
     */
@@ -227,18 +228,26 @@ class Lifter {
     None
   }
 
-  //TODO discuss if its okay, since it takes a long time for a big number of turns
   private def liftWait(turns: Int) = {
-    @tailrec
-    def liftWaitInner(turns: Int, runningAlgo: Algo[_ <: Unit]): Algo[_ <: Unit] = {
-      if (turns < 0) throw new Exception("waitTurns takes a positive integer as a parameter")
-      if (turns == 0)
-        runningAlgo
-      else
-        liftWaitInner(turns - 1, LetBinding(None, Wait(), runningAlgo))
+    if (turns <= 0) throw new Exception("waitTurns takes a positive integer as a parameter")
+    else if (turns == 1) {
+      Wait()
+    } else {
+      val waitCounter = Variable[Int]
+      LetBinding(Some(waitCounter), ScalaCode(code"0"), DoWhile(code"$waitCounter < ${Const(turns)}", LetBinding(Some(waitCounter), ScalaCode(code"$waitCounter + 1"), Wait())))
     }
-    liftWaitInner(turns - 1, Wait())
   }
+
+//    @tailrec
+//    def liftWaitInner(turns: Int, runningAlgo: Algo[_ <: Unit]): Algo[_ <: Unit] = {
+//      if (turns < 0) throw new Exception("waitTurns takes a positive integer as a parameter")
+//      if (turns == 0)
+//        runningAlgo
+//      else
+//        liftWaitInner(turns - 1, LetBinding(None, Wait(), runningAlgo))
+//    }
+//    liftWaitInner(turns - 1, Wait())
+//  }
 
 }
 

@@ -162,9 +162,8 @@ class SSO extends StateMachineElement() {
             }
             if (edge1.cond != null) {
               edge1.cond = edge1.cond.subs(otherThis).~>(selfThis.toCode)
-              //TODO check why this doesnt work
-//              edge1.code = edge1.cond.subs(otherReturnValue).~>(selfReturnValue.toCode)
-//              edge1.code = edge1.cond.subs(otherResponseMessage).~>(selfResponseMessage.toCode)
+              edge1.cond = edge1.cond.subs(otherReturnValue).~>(selfReturnValue.toCode)
+              edge1.cond = edge1.cond.subs(otherResponseMessage).~>(selfResponseMessage.toCode)
             }
           })
           edge1.from match {

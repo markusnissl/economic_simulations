@@ -46,11 +46,14 @@ class Actor1() extends Actor {
   var actor2: Actor2stateless = new Actor2stateless()
 
   def main() = {
-    while (true) {
-      actor2.sell(1,22)("i buy stuff")
-      actor2.sell(1,22)("i buy sssss")
-      SpecialInstructions.waitTurns(1)
-    }
+//    while (c < 15) {
+//      actor2.sell(1,22)("i buy stuff")
+//      actor2.sell(1,22)("i buy sssss")
+//      SpecialInstructions.waitTurns(1)
+//    }
+    println(3)
+    SpecialInstructions.waitTurns(5)
+    println(5)
   }
 
   def met3(): String = {
